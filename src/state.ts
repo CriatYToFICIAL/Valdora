@@ -7,10 +7,14 @@ import {
   type Person,
   type Place,
 } from "./data";
+import { residents, ids, type Resident, type NpcId } from "./actors";
+import { buildings, describeMap, locations } from "./maps";
+import { blocked } from "./navigation";
 export interface Pizza {
   recipe: RecipeId;
   items: Ingredient[];
-  stage: "assembly" | "raw" | "oven" | "ready";
+  stage: "assembly" | "raw" | "oven" | "ready" | "boxed";
+  toppings?: { item: Ingredient; x: number; y: number }[];
   seconds: number;
   quality: "perfeita" | "crua" | "queimada";
 }
@@ -20,9 +24,11 @@ export interface Order {
   recipe: RecipeId;
   accepted: boolean;
   waited: number;
+  kind?: "counter" | "delivery";
+  destination?: Place;
 }
 export interface State {
-  version: 1;
+  version: 2;
   name: string;
   day: number;
   minute: number;
@@ -49,8 +55,11 @@ export interface State {
   place: Place;
   x: number;
   y: number;
+  npcs: Record<NpcId, Resident>;
+  deliveries: number;
+  deliveredToday: number;
 }
-export const SAVE_KEY = "valdora.week.v1";
+export const SAVE_KEY = "valdora.week.v2";
 export const cleaning = [
   "caixa-1",
   "caixa-2",
@@ -63,7 +72,7 @@ export const cleaning = [
 ];
 export function fresh(name: string): State {
   return {
-    version: 1,
+    version: 2,
     name: name.trim().slice(0, 20) || "Alex",
     day: 1,
     minute: 8 * 60,
@@ -88,8 +97,11 @@ export function fresh(name: string): State {
     orderSerial: 0,
     complete: false,
     place: "street",
-    x: 300,
-    y: 610,
+    x: 240,
+    y: 384,
+    npcs: residents(),
+    deliveries: 0,
+    deliveredToday: 0,
   };
 }
 export function quota(s: State) {
@@ -105,7 +117,9 @@ export function canSleep(s: State): boolean {
 export function objective(s: State): string {
   if (s.complete) return "A primeira semana está guardada no coração.";
   if (!s.introduced.includes(s.day))
-    return "Entre na pizzaria e encontre seus vizinhos.";
+    return s.place === "pizzeria"
+      ? "Seu vizinho está vindo ajudar. Pode explorar enquanto espera."
+      : "Entre na pizzaria e encontre seus vizinhos.";
   if (s.day === 1) {
     if (s.cleaned.length < cleaning.length)
       return `Restaure a pizzaria · ${s.cleaned.length}/${cleaning.length}`;
@@ -116,6 +130,24 @@ export function objective(s: State): string {
     return "Conserte o forno com Daniel · interaja com o forno.";
   if (s.day === 4 && !s.bought)
     return "Visite a mercearia e compre ingredientes.";
+  if (s.order) {
+    const o = s.order,
+      p = s.pizza;
+    if (!o.accepted)
+      return o.kind === "delivery"
+        ? "Atenda o telefone na ponta do balcão."
+        : "Receba o cliente no balcão.";
+    if (!p || p.stage === "assembly")
+      return "Monte a receita na bancada da cozinha.";
+    if (p.stage === "raw") return "Leve a pizza ao forno. Use E para colocar.";
+    if (p.stage === "oven")
+      return "Acompanhe o forno. Retire quando a borda dourar.";
+    if (o.kind === "delivery" && p.stage === "ready")
+      return "Embale a pizza na bancada à esquerda do forno.";
+    if (o.kind === "delivery")
+      return "Siga o marcador e entregue com E no endereço correto.";
+    return "Sirva a pizza ao cliente que fez o pedido.";
+  }
   if (s.dailyServed < quota(s))
     return `Atenda os pedidos · ${s.dailyServed}/${quota(s)}${s.day === 2 ? " · Dona Rosa está esperando" : ""}`;
   if (s.day === 7) return "Converse com seus amigos e leia o caderno do avô.";
@@ -136,6 +168,11 @@ export function startOrder(s: State): void {
         ? ["rosa", "daniel", "rosa"]
         : ["lia", "daniel", "rosa"];
   const person = people[s.dailyServed % people.length];
+  const delivery =
+    (s.day === 4 && s.dailyServed === 0) ||
+    (s.day === 5 && s.dailyServed === 2) ||
+    (s.day === 6 && s.dailyServed === 1) ||
+    (s.day === 7 && s.dailyServed === 1);
   const available = s.unlocked;
   const recipe =
     s.day === 2
@@ -143,7 +180,17 @@ export function startOrder(s: State): void {
       : s.day === 4 && s.dailyServed === 0
         ? "margherita"
         : available[(s.dailyServed + s.day) % available.length];
-  s.order = { id: ++s.orderSerial, person, recipe, accepted: false, waited: 0 };
+  s.order = {
+    id: ++s.orderSerial,
+    person: delivery ? (s.day % 2 === 0 ? "rosa" : "daniel") : person,
+    recipe,
+    accepted: false,
+    waited: 0,
+    kind: delivery ? "delivery" : "counter",
+    ...(delivery
+      ? { destination: (s.day % 2 === 0 ? "rosaHome" : "workshop") as Place }
+      : {}),
+  };
 }
 export function beginPizza(s: State, recipe: RecipeId): string | null {
   if (s.pizza)
@@ -216,12 +263,29 @@ export function serve(s: State): {
 } {
   if (!s.order?.accepted)
     return { error: "Converse com o cliente para receber o pedido." };
-  if (!s.pizza || s.pizza.stage !== "ready")
+  if (s.order.kind === "delivery") {
+    const b = buildings.find((b) => b.place === s.order!.destination);
+    if (
+      s.place !== s.order.destination &&
+      !(
+        s.place === "street" &&
+        b &&
+        Math.hypot(s.x - b.door[0], s.y - b.door[1] - 30) < 65
+      )
+    )
+      return {
+        error: "Esta não é a residência do pedido. Siga o marcador dourado.",
+      };
+  } else if (s.place !== "pizzeria")
+    return { error: "Seu cliente está esperando na pizzaria." };
+  if (!s.pizza || !["ready", "boxed"].includes(s.pizza.stage))
     return { error: "Sua pizza ainda não saiu do forno." };
   if (s.pizza.recipe !== s.order.recipe)
     return {
       error: `O pedido é ${recipes[s.order.recipe].name}. Guarde esta pizza ou prepare a receita certa.`,
     };
+  if (s.order.kind === "delivery" && s.pizza.stage !== "boxed")
+    return { error: "Embale a pizza na bancada de viagem antes de sair." };
   const quality = s.pizza.quality;
   const tip = quality === "perfeita" && s.order.waited < 180 ? 4 : 0;
   const amount =
@@ -239,7 +303,12 @@ export function serve(s: State): {
   s.sold++;
   s.customers++;
   s.dailyServed++;
+  if (s.order.kind === "delivery") {
+    s.deliveries++;
+    s.deliveredToday++;
+  }
   if (quality === "perfeita") s.perfect++;
+  s.npcs[s.order.person].departing = true;
   s.order = null;
   s.pizza = null;
   return {
@@ -276,11 +345,12 @@ export function nextDay(s: State): boolean {
   s.day++;
   s.minute = 480;
   s.dailyServed = 0;
+  s.deliveredToday = 0;
   s.pizza = null;
   s.order = null;
   s.place = "apartment";
-  s.x = 480;
-  s.y = 360;
+  s.x = 320;
+  s.y = 400;
   // Rosa leaves enough basic staples for the day's required service; specialty goods remain purchasable.
   for (const i of ["massa", "molho", "queijo"] as Ingredient[])
     s.inventory[i] = Math.max(s.inventory[i], quota(s) + 1);
@@ -299,7 +369,7 @@ export function introDone(s: State) {
   startOrder(s);
 }
 export function tick(s: State, seconds: number) {
-  s.minute = Math.min(23 * 60 + 50, s.minute + seconds * 1.5);
+  s.minute = Math.min(29 * 60 + 30, s.minute + seconds * 4);
   if (s.order?.accepted) s.order.waited += seconds;
   if (s.pizza?.stage === "oven") s.pizza.seconds += seconds;
 }
@@ -313,15 +383,28 @@ export function save(s: State): boolean {
 }
 export function load(): State | null {
   try {
-    const s = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+    const previous = !localStorage.getItem(SAVE_KEY);
+    const s = JSON.parse(
+      localStorage.getItem(SAVE_KEY) ||
+        localStorage.getItem("valdora.week.v1") ||
+        "null",
+    );
     if (
       !s ||
-      s.version !== 1 ||
+      ![1, 2].includes(s.version) ||
       !Number.isInteger(s.day) ||
       s.day < 1 ||
       s.day > 7 ||
       typeof s.name !== "string" ||
-      !["street", "pizzeria", "apartment", "shop"].includes(s.place) ||
+      ![
+        "street",
+        "pizzeria",
+        "apartment",
+        "shop",
+        "rosaHome",
+        "florist",
+        "workshop",
+      ].includes(s.place) ||
       !Number.isFinite(s.x) ||
       !Number.isFinite(s.y) ||
       !Number.isFinite(s.minute) ||
@@ -334,9 +417,61 @@ export function load(): State | null {
       !Array.isArray(s.unlocked) ||
       s.unlocked.some((id: string) => !(id in recipes)) ||
       !Number.isFinite(s.money) ||
-      s.money < 0
+      s.money < 0 ||
+      [
+        "dailyServed",
+        "sold",
+        "earned",
+        "customers",
+        "perfect",
+        "satisfaction",
+        "orderSerial",
+      ].some((k) => !Number.isFinite(s[k]) || s[k] < 0)
     )
       return null;
+    if (previous) {
+      s.place = "apartment";
+      s.x = 320;
+      s.y = 400;
+    }
+    s.version = 2;
+    s.npcs ??= residents();
+    for (const id of ids) {
+      const r = s.npcs[id];
+      if (
+        !r ||
+        r.id !== id ||
+        !(r.place in locations) ||
+        !Number.isFinite(r.x) ||
+        !Number.isFinite(r.y) ||
+        ![0, 1, 2, 3].includes(r.direction)
+      ) {
+        s.npcs[id] = residents()[id];
+        continue;
+      }
+      if (
+        !Array.isArray(r.route) ||
+        r.route.some(
+          (p: unknown) =>
+            !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite),
+        )
+      ) {
+        r.route = [];
+        r.target = "";
+      }
+      if (blocked(describeMap(r.place, s), r.x, r.y)) {
+        [r.x, r.y] = describeMap(r.place, s).spawn;
+        r.route = [];
+        r.target = "";
+      }
+    }
+    const map = describeMap(s.place, s);
+    if (blocked(map, s.x, s.y)) {
+      [s.x, s.y] = map.spawn;
+    }
+    s.deliveries ??= 0;
+    s.deliveredToday ??= 0;
+    if (s.order && !s.order.kind) s.order.kind = "counter";
     return s;
   } catch {
     return null;

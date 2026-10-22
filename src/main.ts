@@ -1,12 +1,11 @@
 import Phaser from "phaser";
 import { ValdoraScene } from "./world";
-import "./style.css";
-import "./pixel.css";
+import "./game.css";
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
-  width: 1152,
-  height: 720,
+  width: 640,
+  height: 400,
   backgroundColor: "#192f2e",
   pixelArt: true,
   roundPixels: true,

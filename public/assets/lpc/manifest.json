@@ -1,0 +1,119 @@
+[
+  {
+    "file": "house.png",
+    "source_path": "tileset/original/Sharm/building-exterior/house.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "b596a455cbec21918695993a1ed2df099c2770ff4b676a74b07daa65032ca259"
+  },
+  {
+    "file": "inside.png",
+    "source_path": "tileset/original/Sharm/building-interior/inside.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "885e848e25be9da8e85f01103172d3c554ca7de1c41cdc65e43a1a43dad9be97"
+  },
+  {
+    "file": "kitchen.png",
+    "source_path": "tileset/original/Sharm/building-interior/kitchen.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "97c364c55bf4f6191a025613c84dbd7e9d0997dc8f42f8001eb0194adcd18705"
+  },
+  {
+    "file": "country.png",
+    "source_path": "tileset/original/Sharm/building-interior/country.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "dab690b20c23d01d41ec2030e8bf50d6546347a1baa6f7e0767ff0e7232169e2"
+  },
+  {
+    "file": "cabinets.png",
+    "source_path": "tileset/original/Sharm/building-interior/cabinets.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "b03bd17e8b1ef5635e6b255f098697457a4016f253b2cb4424eb817fcd0ab4bc"
+  },
+  {
+    "file": "stairs.png",
+    "source_path": "tileset/original/Sharm/building-interior/stairs.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "6a3c889cd88fc3fd37328dbbb269369f09d88043f8b9b22b99480735a1d80396"
+  },
+  {
+    "file": "grass.png",
+    "source_path": "tileset/original/Sharm/outdoor/PNG/grass.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "9fad54558dcb0aa91859869c603e76fe362ae320e0c4b1e873266566cb0d73a0"
+  },
+  {
+    "file": "dirt.png",
+    "source_path": "tileset/original/Sharm/outdoor/PNG/dirt.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "115ffc435f5ce95a5462c08708a158bac014ac4f6fd631af44e335b77a0a264b"
+  },
+  {
+    "file": "tree.png",
+    "source_path": "tileset/original/Sharm/outdoor/PNG/treetop.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "37f3d9c4beb61b05fad39bd5efdecc03b5d67504307936397bb1645824bbf475"
+  },
+  {
+    "file": "trunk.png",
+    "source_path": "tileset/original/Sharm/outdoor/PNG/trunk.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "8b03c5efa6950b5be6c6db989e22bee024c0ee232bc665768db3c35e68a28651"
+  },
+  {
+    "file": "barrel.png",
+    "source_path": "tileset/original/Sharm/object/barrel.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "c639301d7eb0b947c95b8a74729b456ba325de3c509df512d02d58118322ba2d"
+  },
+  {
+    "file": "signs.png",
+    "source_path": "tileset/original/Sharm/object/signs.png",
+    "author": "Lanea Zimmerman (Sharm)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "2cce6eeb0e19b0842afdbaf754b066613ba157b422662037d2efc92b0b598143"
+  },
+  {
+    "file": "floors.png",
+    "source_path": "tileset/original/HughSpectrum/castlefloors.png",
+    "author": "Daniel Armstrong (HughSpectrum)",
+    "license": "CC-BY-SA-3.0",
+    "source_commit": "f61104a1ecc54e7bce54b82ada7d7ba4c41bc524",
+    "source_url": "https://github.com/OpenGameArt/LiberatedPixelCup",
+    "sha256": "5244b8ee8ff88d5ce553a0cf332b8bdcbfe8394e16cfff16b93fa44357644415"
+  }
+]

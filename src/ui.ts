@@ -5,7 +5,6 @@ import {
   recipes,
   type Ingredient,
   type Line,
-  type Person,
   type RecipeId,
 } from "./data";
 import {
@@ -19,12 +18,12 @@ import {
   ovenTime,
   quota,
   rescue,
-  type State,
 } from "./state";
+import { buildings } from "./maps";
 import { muted, sound, toggleSound } from "./audio";
-import type { ValdoraScene } from "./world";
 import { paintPizza } from "./pizza-art";
-const esc = (s: string) =>
+import type { ValdoraScene } from "./world";
+const escape = (s: string) =>
   s.replace(
     /[&<>"']/g,
     (c) =>
@@ -34,44 +33,54 @@ const esc = (s: string) =>
   );
 export class UI {
   root = document.querySelector<HTMLDivElement>("#ui")!;
-  overlay: HTMLDivElement;
+  overlay!: HTMLDivElement;
   mode = "menu";
   lines: Line[] = [];
-  lineIndex = 0;
-  onDone: (() => void) | null = null;
-  private hudKey = "";
-  private toastTimer = 0;
+  index = 0;
+  typed = 0;
+  callback: (() => void) | undefined;
+  selected: Ingredient | null = null;
+  private hudValue = "";
+  private toastClock = 0;
+  private thoughtClock = 0;
   constructor(public scene: ValdoraScene) {
     this.root.innerHTML =
-      '<div id="hud"></div><div id="hint"></div><div id="toast" role="status"></div><div id="overlay"></div>';
+      '<div id="logical-ui"><div id="hud"></div><div id="hint"></div><div id="toast" role="status"></div><div id="overlay"></div></div>';
     this.overlay = document.querySelector("#overlay")!;
+    new ResizeObserver(() => this.resize()).observe(this.root);
+    this.resize();
+  }
+  resize() {
+    const el = document.querySelector<HTMLDivElement>("#logical-ui")!;
+    el.style.transform = `scale(${this.root.clientWidth / 640})`;
   }
   get s() {
     return this.scene.state;
   }
   button(id: string, fn: () => void) {
     this.overlay
-      .querySelector<HTMLButtonElement>(`#${id}`)
+      .querySelector<HTMLButtonElement>("#" + id)
       ?.addEventListener("click", () => {
-        sound();
+        sound("tap");
         fn();
       });
   }
   set(html: string, mode: string) {
     this.mode = mode;
     this.overlay.innerHTML = html;
-    this.overlay.classList.add("visible");
+    this.overlay.className = "visible " + mode;
     this.scene.releaseKeys();
   }
   close() {
     this.mode = "";
+    this.overlay.className = "";
     this.overlay.innerHTML = "";
-    this.overlay.classList.remove("visible");
+    this.scene.thought?.setVisible(false);
     this.scene.releaseKeys();
     this.scene.persist();
   }
-  frame(eyebrow: string, title: string, body: string, footer = "") {
-    return `<section class="panel"><div class="panel-top"><span class="eyebrow">${eyebrow}</span><button id="close" class="icon" aria-label="Fechar">×</button></div><h2>${title}</h2>${body}${footer}</section>`;
+  frame(title: string, html: string, footer = "") {
+    return `<section class="rpg-panel"><header><h2>${title}</h2><button id="close" aria-label="Fechar">×</button></header>${html}${footer}</section>`;
   }
   closable() {
     this.button("close", () => this.close());
@@ -79,112 +88,159 @@ export class UI {
   menu() {
     const saved = load();
     this.set(
-      `<section class="title-screen"><div class="edition">UM PEQUENO LUGAR PARA RECOMEÇAR</div><div class="logo-mark">✦</div><h1>Valdora</h1><div class="title-rule"><span></span>A primeira fatia<span></span></div><p>Uma chave antiga. Um caderno de receitas.<br>E uma cidade inteira para reencontrar.</p><div class="menu-actions"><button id="new" class="primary">Novo jogo <span>→</span></button><button id="continue" ${saved ? "" : "disabled"}>Continuar ${saved ? `<small>Dia ${saved.day} · ${esc(saved.name)}</small>` : "<small>nenhuma história salva ainda</small>"}</button><button id="credits" class="quiet">Créditos & controles</button></div><div class="menu-note">SETE DIAS · UMA PIZZARIA · UM NOVO COMEÇO</div></section>`,
+      `<div class="menu-scene"><span class="overline">UMA CHAVE. UMA CIDADE. UM RECOMEÇO.</span><h1>VALDORA</h1><p class="subtitle">A primeira fatia</p><nav><button id="new">▶ Novo jogo</button><button id="continue" ${saved ? "" : "disabled"}>Continuar${saved ? ` · dia ${saved.day}` : ""}</button><button id="credits">Guia & créditos</button></nav><small>PRIMEIRA SEMANA · EDIÇÃO LPC</small></div>`,
       "menu",
     );
-    this.button("new", () => this.nameScreen(!!saved));
+    this.button("new", () => this.name(!!saved));
     this.button("continue", () => {
       if (saved) this.scene.startGame(saved);
     });
     this.button("credits", () => this.help(true));
   }
-  nameScreen(replacing: boolean) {
+  name(replace: boolean) {
     this.set(
-      `<section class="panel small"><span class="eyebrow">ANTES DE ABRIR A PORTA</span><h2>Como você se chama?</h2><p>Seu avô deixou uma chave com o seu nome.<br>Agora é hora de voltar para casa.</p><label class="field-label" for="player-name">Seu nome</label><input id="player-name" maxlength="20" placeholder="Alex" autocomplete="off"/><p class="muted">${replacing ? "Começar substituirá o progresso salvo neste navegador." : "O progresso é salvo automaticamente neste navegador."}</p><div class="row"><button id="back">Voltar</button><button id="start" class="primary">Chegar a Valdora →</button></div></section>`,
+      this.frame(
+        "O nome na chave",
+        `<p>Seu avô deixou a pizzaria para você.<br>Como os vizinhos vão chamar você?</p><input id="player-name" maxlength="20" value="Alex" aria-label="Nome do protagonista"/><small>${replace ? "Uma nova história substituirá o slot desta edição. O save da versão anterior será preservado." : "Seu progresso é salvo neste navegador."}</small>`,
+        `<button id="start">Chegar a Valdora →</button>`,
+      ),
       "name",
     );
-    this.button("back", () => this.menu());
+    this.button("close", () => this.menu());
     this.button("start", () =>
       this.scene.newGame(
-        (document.querySelector("#player-name") as HTMLInputElement).value,
+        this.overlay.querySelector<HTMLInputElement>("#player-name")!.value,
       ),
-    );
-    setTimeout(
-      () => document.querySelector<HTMLInputElement>("#player-name")?.focus(),
-      80,
     );
   }
   dayCard(first = false) {
     const d = days[this.s.day - 1];
     this.set(
-      `<section class="day-card"><span class="eyebrow">${first ? "BEM-VINDO A VALDORA" : "UMA NOVA MANHÃ"}</span><div class="day-number">${String(this.s.day).padStart(2, "0")}<span>/ 07</span></div><h2>${d.title}</h2><p>${d.subtitle}</p>${this.s.day > 1 ? '<p class="muted">Rosa deixou uma cesta com os ingredientes básicos do dia.</p>' : '<p class="muted">A pizzaria de seu avô fica logo acima de você.<br>Caminhe até a porta e pressione E.</p>'}<button id="wake" class="primary">${first ? "Guardar a bagagem e seguir" : "Começar o dia"} →</button></section>`,
+      `<section class="rpg-panel day-card"><span class="overline">${first ? "A ESTRADA TERMINA AQUI" : "UMA NOVA MANHÃ"}</span><h2>Dia ${this.s.day} · ${d.title}</h2><p>${d.subtitle}</p><small>${first ? "A pizzaria fica logo ao norte. Entre caminhando pela porta." : "Rosa deixou ingredientes básicos. Os pequenos erros também cabem nesta semana."}</small><button id="wake">${first ? "Guardar a bagagem" : "Levantar"} →</button></section>`,
       "day",
     );
-    sound("day");
     this.button("wake", () => this.close());
   }
   dialogue(lines: Line[], done?: () => void) {
     this.lines = lines;
-    this.lineIndex = 0;
-    this.onDone = done || null;
+    this.index = 0;
+    this.callback = done;
     this.drawLine();
   }
   drawLine() {
-    const line = this.lines[this.lineIndex];
-    const person = line.who;
+    const line = this.lines[this.index];
+    this.typed = 0;
+    if (line.who === "hero") {
+      this.set(
+        '<button id="advance" class="thought-next" aria-label="Avançar pensamento">↵</button>',
+        "thought",
+      );
+      this.scene.think(line.text, 6);
+      this.thoughtClock = Math.max(2.5, line.text.length / 35);
+      this.button("advance", () => this.advance());
+      return;
+    }
+    this.scene.thought.setVisible(false);
     this.set(
-      `<section class="dialogue ${person === "hero" ? "no-portrait" : ""}" aria-live="polite">${person !== "hero" ? `<div class="portrait"><img src="/assets/${person}-portrait.png" alt="Retrato de ${names[person]}"/></div>` : ""}<div class="dialogue-copy"><span class="eyebrow">${person === "hero" ? esc(this.s.name) : names[person]}</span><p>${esc(line.text)}</p><div class="dialogue-bottom"><span>${this.lineIndex + 1} / ${this.lines.length}</span><button id="advance">${this.lineIndex + 1 === this.lines.length ? "Continuar" : "Próxima fala"} <kbd>↵</kbd></button></div></div></section>`,
+      `<section class="dialogue" aria-live="polite"><div class="portrait"><img src="/assets/${line.who}-portrait.png" alt="${names[line.who]}"/></div><div class="dialogue-copy"><b>${names[line.who]}</b><p id="speech"></p><button id="advance" aria-label="Avançar diálogo">▼ <kbd>↵</kbd></button></div></section>`,
       "dialogue",
     );
     this.button("advance", () => this.advance());
   }
   advance() {
-    if (this.mode !== "dialogue") return;
-    sound();
-    if (++this.lineIndex < this.lines.length) this.drawLine();
+    if (!["thought", "dialogue"].includes(this.mode)) return;
+    const line = this.lines[this.index];
+    if (this.mode === "dialogue" && this.typed < line.text.length) {
+      this.typed = line.text.length;
+      this.overlay.querySelector("#speech")!.textContent = line.text;
+      return;
+    }
+    if (++this.index < this.lines.length) this.drawLine();
     else {
-      const cb = this.onDone;
-      this.onDone = null;
+      const cb = this.callback;
+      this.callback = undefined;
       this.close();
       cb?.();
     }
   }
-  toast(message: string, error = false) {
-    const el = document.querySelector<HTMLDivElement>("#toast")!;
-    el.textContent = message;
-    el.className = `show ${error ? "error" : ""}`;
-    window.clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => (el.className = ""), 4500);
-    sound(error ? "bad" : "good");
+  update(dt: number) {
+    if (this.mode === "dialogue") {
+      const line = this.lines[this.index];
+      this.typed = Math.min(line.text.length, this.typed + dt * 45);
+      const speech = this.overlay.querySelector("#speech");
+      if (speech)
+        speech.textContent = line.text.slice(0, Math.ceil(this.typed));
+    }
+    if (this.mode === "thought") {
+      this.thoughtClock -= dt;
+      if (this.thoughtClock <= 0) this.advance();
+    }
+    if (this.toastClock > 0) {
+      this.toastClock -= dt;
+      if (this.toastClock <= 0)
+        document.querySelector("#toast")!.className = "";
+    }
+  }
+  key(e: KeyboardEvent) {
+    if (
+      ["Enter", "Space"].includes(e.code) &&
+      ["dialogue", "thought"].includes(this.mode)
+    ) {
+      e.preventDefault();
+      this.advance();
+      return;
+    }
+    if (e.code === "Escape" && !["menu", "day", "ending"].includes(this.mode)) {
+      this.close();
+      return;
+    }
+    if (this.mode === "kitchen") {
+      const n = Number(e.key) - 1;
+      if (n >= 0 && n < 5) {
+        this.putIngredient(Object.keys(ingredients)[n] as Ingredient, 0.5, 0.5);
+        return;
+      }
+      if (e.code === "KeyE" || e.code === "Enter") this.finishPizza();
+    }
+  }
+  toast(text: string, error = false) {
+    const el = document.querySelector("#toast")!;
+    el.textContent = text;
+    el.className = "show" + (error ? " error" : "");
+    this.toastClock = 3.6;
+    if (error) sound("bad");
   }
   hud() {
-    const s = this.s;
-    const clock = `${Math.floor(s.minute / 60)
-      .toString()
-      .padStart(2, "0")}:${Math.floor(s.minute % 60)
-      .toString()
-      .padStart(2, "0")}`;
-    const order = s.order;
-    const pizza = s.pizza;
-    const time = ovenTime(s);
-    let oven = "";
-    if (pizza?.stage === "oven") {
-      const p = Math.min(100, (pizza.seconds / (time + 9)) * 100);
-      const good = pizza.seconds >= time && pizza.seconds <= time + 9;
-      oven = `<div class="oven-hud"><span>FORNO · ${good ? "RETIRE AGORA" : pizza.seconds > time + 9 ? "PASSOU DO PONTO" : "ASSANDO"} · ${Math.floor(pizza.seconds)}s</span><div class="bake-track"><i style="left:${(time / (time + 9)) * 100}%;width:${(9 / (time + 9)) * 100}%"></i><b style="left:${p}%"></b></div></div>`;
-    }
-    const html = `<header class="hud-header"><div class="brand">Valdora<span>A PRIMEIRA FATIA</span></div><div class="day-pill"><b>Dia ${String(s.day).padStart(2, "0")}</b><span>${days[s.day - 1].title}</span></div><div class="clock">☀ ${clock}</div><div class="money">R$ ${s.money}</div><button id="bag" title="Inventário e caderno (I)">Caderno <kbd>I</kbd></button><button id="help" aria-label="Controles">?</button></header><aside class="objective"><span class="eyebrow">O QUE VEM AGORA</span><p>${objective(s)}</p>${order ? `<div class="order-note"><b>${order.accepted ? "PEDIDO" : "CLIENTE ESPERANDO"}</b><span>${names[order.person]} · ${recipes[order.recipe].name}</span>${order.accepted ? `<small>${recipes[order.recipe].items.map((i) => ingredients[i].name).join(" + ")}</small>` : "<small>Converse com o cliente no salão.</small>"}</div>` : ""}${pizza && pizza.stage !== "oven" ? `<small class="carrying">${pizza.stage === "assembly" ? "Na bancada" : pizza.stage === "raw" ? "Leve ao forno" : "Pronta para entregar"} · ${recipes[pizza.recipe].name}${pizza.stage === "ready" ? ` (${pizza.quality})` : ""}</small>` : ""}${oven}</aside><footer class="hud-footer"><span>✦ ${this.scene.locationName()}</span><span><kbd>WASD</kbd> mover <kbd>E</kbd> interagir <kbd>↵</kbd> diálogo</span><span class="save-status">${this.scene.saveFailed ? "⚠ Salvamento indisponível" : "◆ salvo neste navegador"}</span></footer>`;
-    if (html !== this.hudKey) {
-      this.hudKey = html;
-      document.querySelector("#hud")!.innerHTML = html;
+    const s = this.s,
+      h = Math.floor((s.minute % 1440) / 60),
+      m = Math.floor(s.minute % 60),
+      order = s.order;
+    const current = order
+      ? order.kind === "delivery"
+        ? order.accepted
+          ? `Entrega · ${recipes[order.recipe].name} · ${buildings.find((b) => b.place === order.destination)?.address}`
+          : "☎ O telefone está tocando"
+        : order.accepted
+          ? `Pedido · ${recipes[order.recipe].name}`
+          : "Um cliente está chegando ao balcão."
+      : "";
+    const text = `<div class="time-hud"><b>D${s.day}</b> ${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")} <span>${h >= 19 || h < 6 ? "☾" : "☀"}</span></div><div class="wallet">R$ ${s.money} <button id="bag" aria-label="Caderno">▤ I</button></div><div class="task-hud">${escape(objective(s))}${current ? `<small>${escape(current)}</small>` : ""}</div><div class="save-indicator" title="${this.scene.saveFailed ? "Salvamento indisponível" : "Salvo localmente"}">${this.scene.saveFailed ? "!" : "◆"}</div>`;
+    if (text !== this.hudValue) {
+      this.hudValue = text;
+      document.querySelector("#hud")!.innerHTML = text;
       document.querySelector("#bag")?.addEventListener("click", () => {
         if (!this.mode) this.journal();
-      });
-      document.querySelector("#help")?.addEventListener("click", () => {
-        if (!this.mode) this.help();
       });
     }
   }
   hint(text: string) {
-    const el = document.querySelector("#hint")!;
-    el.innerHTML = text ? `<kbd>E</kbd> ${esc(text)}` : "";
+    document.querySelector("#hint")!.textContent = text;
   }
   journal() {
     this.set(
       this.frame(
-        "CADERNO DO ANTÔNIO",
-        "Receitas & pequenas conquistas",
-        `<div class="journal-grid"><div><h3>Receitas da família</h3>${this.s.unlocked.map((id) => `<article class="recipe"><b>${recipes[id].name}<span>R$ ${recipes[id].price}</span></b><p>${recipes[id].description}</p><small>${recipes[id].items.map((i) => ingredients[i].name).join(" · ")}</small></article>`).join("")}<h3>Hoje</h3><p>${objective(this.s)}</p><p class="muted">${this.s.dailyServed} / ${quota(this.s)} atendimentos · ${this.s.upgrade ? "Forno com isolamento instalado" : "Forno original do Antônio"}</p></div><div><h3>Na despensa</h3>${Object.entries(
+        "Caderno do Antônio",
+        `<div class="journal-grid"><div><h3>Receitas</h3>${this.s.unlocked.map((id) => `<article><b>${recipes[id].name} <em>R$ ${recipes[id].price}</em></b><p>${recipes[id].items.map((i) => ingredients[i].name).join(" · ")}</p></article>`).join("")}<small>Hoje: ${this.s.dailyServed}/${quota(this.s)} pedidos<br>Forno: ${this.s.upgrade ? "isolamento novo" : "original do Antônio"}</small></div><div><h3>Despensa</h3>${Object.entries(
           ingredients,
         )
           .map(
@@ -193,210 +249,177 @@ export class UI {
           )
           .join(
             "",
-          )}<h3>Nesta semana</h3><p>${this.s.sold} pizzas vendidas<br>${this.s.customers} clientes atendidos<br>R$ ${this.s.earned} recebidos<br>${this.s.perfect} pizzas no ponto</p></div></div>`,
+          )}<p>${this.s.sold} pizzas · ${this.s.deliveries} entregas<br>R$ ${this.s.earned} recebidos</p><small>Satisfação: ${this.s.customers ? Math.round(this.s.satisfaction / this.s.customers) : 100}%</small></div></div>`,
+        `<div class="actions"><button id="discard">Descartar pizza atual</button><button id="guide">Controles</button></div>`,
       ),
       "journal",
     );
     this.closable();
-    const rating = document.createElement("p");
-    rating.className = "muted";
-    rating.textContent = this.s.customers
-      ? `Satisfação da vizinhança: ${Math.round(this.s.satisfaction / this.s.customers)}%`
-      : "A primeira avaliação ainda está por vir.";
-    this.overlay
-      .querySelector(".journal-grid > div:last-child")
-      ?.append(rating);
-  }
-  pizzaGraphic() {
-    return '<canvas id="pizza-preview" width="64" height="64" class="pixel-pizza" aria-label="Pizza montada com os ingredientes selecionados"></canvas>';
+    this.button("discard", () => {
+      discard(this.s);
+      this.scene.persist();
+      this.toast("Montagens inacabadas devolvem os ingredientes.");
+    });
+    this.button("guide", () => this.help());
   }
   kitchen() {
     const s = this.s;
-    if (s.day === 1) {
-      this.toast("Primeiro, vamos limpar e encontrar o caderno.", true);
+    if (s.pizza && s.pizza.stage !== "assembly") {
+      this.scene.think("Termine a pizza que está preparando primeiro.");
       return;
     }
     if (!s.pizza) {
-      this.set(
-        this.frame(
-          "BANCADA DA COZINHA",
-          "Toda pizza começa aqui.",
-          `<p>Escolha uma receita. Depois, coloque os ingredientes na massa.</p><div class="recipe-options">${s.unlocked.map((id) => `<button id="recipe-${id}"><b>${recipes[id].name}</b><small>${recipes[id].items.map((i) => ingredients[i].name).join(" + ")}</small>${s.order?.recipe === id ? '<span class="tag">PEDIDO ATUAL</span>' : ""}</button>`).join("")}</div>`,
-        ),
-        "kitchen",
-      );
-      this.closable();
-      for (const id of s.unlocked)
-        this.button(`recipe-${id}`, () => {
-          beginPizza(s, id);
-          this.scene.persist();
-          this.kitchen();
-        });
-      return;
+      const recipe = s.order?.recipe || s.unlocked[0];
+      beginPizza(s, recipe);
     }
-    if (s.pizza.stage !== "assembly") {
-      this.toast(
-        s.pizza.stage === "raw"
-          ? "Pizza montada! Leve ao forno, à esquerda."
-          : "Termine a pizza atual. Use o caderno para ver o pedido.",
-      );
-      return;
-    }
-    const p = s.pizza;
+    const p = s.pizza!;
     this.set(
-      this.frame(
-        "MÃOS NA MASSA",
-        `Pizza de ${recipes[p.recipe].name}`,
-        `<div class="assembly-grid"><div>${this.pizzaGraphic()}<p class="muted centered">${p.items.length} / ${recipes[p.recipe].items.length} ingredientes</p></div><div><p class="recipe-reminder">${recipes[p.recipe].items.map((i) => `${p.items.includes(i) ? "✓" : "○"} ${ingredients[i].name}`).join("<br>")}</p><div class="ingredient-buttons">${Object.entries(
-          ingredients,
+      `<section class="kitchen-station"><header><b>BANCADA · ${recipes[p.recipe].name.toUpperCase()}</b><button id="close">×</button></header><div class="recipe-note">${recipes[p.recipe].items.map((i) => `${p.items.includes(i) ? "✓" : "○"} ${ingredients[i].name}`).join("　")}</div><div class="worktop"><canvas id="pizza-preview" width="64" height="64" aria-label="Arraste ingredientes para montar a pizza"></canvas><span class="flour">✧</span></div><div class="ingredient-tray">${Object.entries(
+        ingredients,
+      )
+        .map(
+          ([id, i], n) =>
+            `<button class="ingredient" id="add-${id}" data-item="${id}" ${p.items.includes(id as Ingredient) && !["calabresa", "manjericao"].includes(id) ? "disabled" : ""}><i style="--ingredient:${i.color}">${["◯", "▰", "▧", "❧", "●"][n]}</i><span>${i.name}</span><small>${n + 1} · ${s.inventory[id as Ingredient]} un.</small></button>`,
         )
-          .map(
-            ([id, i]) =>
-              `<button id="add-${id}" ${p.items.includes(id as Ingredient) ? "disabled" : ""}><span class="ingredient-dot" style="background:${i.color}"></span>${i.name}<small>${s.inventory[id as Ingredient]} un.</small></button>`,
-          )
-          .join("")}</div></div></div>`,
-        `<div class="row"><button id="discard">Recomeçar</button><button id="assemble" class="primary">Montar e levar →</button></div>`,
-      ),
+        .join(
+          "",
+        )}</div><footer><span>ARRASTE PARA A MASSA · ou teclas 1–5</span><button id="restart">Recomeçar</button><button id="assemble">E · Levar pizza</button></footer></section>`,
       "kitchen",
     );
     this.closable();
     paintPizza(
-      this.overlay.querySelector<HTMLCanvasElement>("#pizza-preview")!,
+      this.overlay.querySelector("#pizza-preview")!,
       p.items,
+      p.toppings,
     );
-    for (const id of Object.keys(ingredients) as Ingredient[])
-      this.button(`add-${id}`, () => {
-        const err = addIngredient(s, id);
-        if (err) this.toast(err, true);
-        else {
-          this.scene.persist();
-          this.kitchen();
-        }
+    for (const id of Object.keys(ingredients) as Ingredient[]) {
+      const button = this.overlay.querySelector<HTMLButtonElement>(
+        "#add-" + id,
+      )!;
+      button.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        this.selected = id;
+        button.classList.add("selected");
       });
-    this.button("discard", () => {
+    }
+    const canvas =
+      this.overlay.querySelector<HTMLCanvasElement>("#pizza-preview")!;
+    canvas.addEventListener("pointerup", (e) => {
+      if (this.selected) {
+        const r = canvas.getBoundingClientRect();
+        this.putIngredient(
+          this.selected,
+          (e.clientX - r.left) / r.width,
+          (e.clientY - r.top) / r.height,
+        );
+      }
+    });
+    this.button("restart", () => {
       discard(s);
       this.kitchen();
     });
-    this.button("assemble", () => {
-      const err = finishAssembly(s);
-      if (err) this.toast(err, true);
-      else {
-        this.close();
-        this.toast("Pizza montada! Caminhe até o forno à esquerda.");
-      }
-    });
+    this.button("assemble", () => this.finishPizza());
   }
-  oven() {
-    const p = this.s.pizza;
-    this.set(
-      this.frame(
-        "O CORAÇÃO DA COZINHA",
-        "Forno do Antônio",
-        `<p>${p?.stage === "oven" ? "A pizza continua assando enquanto esta janela está aberta. Retire na faixa verde." : p?.stage === "raw" ? "Sua pizza está pronta para entrar. A faixa verde indica o ponto certo." : "Monte uma pizza na bancada antes de ligar o forno."}</p><div id="oven-live"></div>`,
-        `<div class="row"><button id="leave">Voltar ao salão</button><button id="oven-action" class="primary">${p?.stage === "oven" ? "Retirar pizza" : "Colocar pizza"}</button></div>`,
-      ),
-      "oven",
-    );
-    this.closable();
-    this.button("leave", () => this.close());
-    this.button("oven-action", () => this.scene.useOven());
-    this.updateOven();
+  putIngredient(item: Ingredient, x: number, y: number) {
+    if (this.mode !== "kitchen") return;
+    const e =
+      this.s.pizza?.items.includes(item) &&
+      ["calabresa", "manjericao"].includes(item)
+        ? null
+        : addIngredient(this.s, item);
+    if (e) {
+      this.toast(e, true);
+      return;
+    }
+    this.s.pizza!.toppings ??= [];
+    this.s.pizza!.toppings.push({ item, x, y });
+    this.selected = null;
+    sound("box");
+    this.scene.persist();
+    this.kitchen();
   }
-  updateOven() {
-    if (this.mode !== "oven") return;
-    const el = document.querySelector("#oven-live");
-    if (!el) return;
-    const p = this.s.pizza;
-    const t = ovenTime(this.s),
-      seconds = p?.seconds || 0;
-    const status =
-      seconds < t
-        ? "A massa ainda está crua"
-        : seconds <= t + 9
-          ? "No ponto! Pode retirar."
-          : "Queimou. A próxima vai ficar melhor.";
-    el.innerHTML = `<div class="oven-display"><span>${p?.stage === "oven" ? Math.floor(seconds) + "s" : "Pronto para assar"}</span><p>${p?.stage === "oven" ? status : `Ponto ideal: ${t} a ${t + 9} segundos`}</p><div class="bake-track"><i style="left:${(t / (t + 9)) * 100}%;width:${(9 / (t + 9)) * 100}%"></i><b style="left:${Math.min(100, (seconds / (t + 9)) * 100)}%"></b></div></div>`;
+  finishPizza() {
+    const e = finishAssembly(this.s);
+    if (e) {
+      this.toast(e, true);
+      return;
+    }
+    this.close();
+    this.scene.think("Montada. Agora, o forno.");
   }
   shop() {
     this.set(
       this.frame(
-        "MERCEARIA BOA PROSA",
-        "Fresquinho, como deve ser.",
-        `<p>Pacotes de 3 unidades. Saldo: <b>R$ ${this.s.money}</b></p><div class="shop-list">${Object.entries(
+        "Mercearia Boa Prosa",
+        `<p>Pacotes de três · saldo R$ ${this.s.money}</p><div class="shop-list">${Object.entries(
           ingredients,
         )
           .map(
             ([id, i]) =>
-              `<button id="buy-${id}"><span class="ingredient-dot" style="background:${i.color}"></span><b>${i.name}</b><small>${this.s.inventory[id as Ingredient]} na despensa</small><strong>3 un. · R$ ${i.price * 3}</strong></button>`,
+              `<button id="buy-${id}"><i style="color:${i.color}">◆</i> ${i.name}<small>${this.s.inventory[id as Ingredient]} na despensa</small><b>R$ ${i.price * 3}</b></button>`,
           )
           .join(
             "",
-          )}</div><div class="assistance"><p>Acabou algum ingrediente do pedido? A cesta solidária da Rosa ajuda a recomeçar.</p><button id="rescue">Pedir kit de emergência gratuito</button></div>`,
+          )}</div><small>Se faltar ingrediente, a cesta solidária da Rosa ajuda a recomeçar.</small>`,
+        `<button id="rescue">Pedir um kit de emergência gratuito</button>`,
       ),
       "shop",
     );
     this.closable();
-    for (const i of Object.keys(ingredients) as Ingredient[])
-      this.button(`buy-${i}`, () => {
-        const err = buy(this.s, i);
+    for (const id of Object.keys(ingredients) as Ingredient[])
+      this.button("buy-" + id, () => {
+        const e = buy(this.s, id);
         this.scene.persist();
         this.shop();
-        this.toast(err || "Ingredientes guardados na despensa.", !!err);
+        this.toast(e || "Ingredientes guardados na despensa.", !!e);
+        sound("coins");
       });
     this.button("rescue", () => {
-      const err = rescue(this.s);
+      const e = rescue(this.s);
       this.scene.persist();
       this.shop();
-      this.toast(
-        err || "Rosa separou um kit. Depois você retribui com uma boa pizza.",
-        !!err,
-      );
+      this.toast(e || "Rosa separou um kit para você.", !!e);
     });
   }
   upgrade() {
     this.set(
       this.frame(
-        "UM POUCO DE CARINHO",
-        "Mais calor. Menos espera.",
-        `<div class="upgrade-icon">♨</div><p>Daniel preparou um kit de isolamento para o forno.</p><p>O tempo ideal passa de <b>16 para 9 segundos</b>.<br>A janela de acerto continua generosa: 9 segundos.</p><p class="muted">Melhoria opcional · disponível a partir do dia 6</p>`,
-        `<button id="purchase-upgrade" class="primary" ${this.s.upgrade || this.s.day < 6 ? "disabled" : ""}>${this.s.upgrade ? "✓ Já instalado" : "Instalar por R$ 80"}</button>`,
+        "Um forno com fôlego novo",
+        `<p>Daniel pode instalar um isolamento.<br>O ponto ideal passa de <b>16 para 9 segundos</b>.</p><small>Disponível a partir do dia 6 · melhoria opcional</small>`,
+        `<button id="purchase-upgrade" ${this.s.day < 6 || this.s.upgrade ? "disabled" : ""}>${this.s.upgrade ? "✓ Instalado" : "Instalar · R$ 80"}</button>`,
       ),
       "upgrade",
     );
     this.closable();
     this.button("purchase-upgrade", () => {
       if (this.s.money < 80) {
-        this.toast("Faltam algumas pizzas para juntar R$ 80.", true);
+        this.toast("Ainda faltam algumas pizzas.", true);
         return;
       }
       this.s.money -= 80;
       this.s.upgrade = true;
       this.scene.persist();
       this.upgrade();
-      this.toast("Isolamento instalado. Seu forno está mais rápido!");
+      sound("good");
     });
   }
   repair() {
-    const expected = ["off", "wire", "on"][this.s.repairStep];
     this.set(
       this.frame(
-        "DANIEL ESTÁ DE OLHO",
-        "Um conserto a quatro mãos.",
-        `<p>“Primeiro desligue. Depois aperte o conector. Só então pode religar.”</p><div class="repair-steps"><span class="${this.s.repairStep > 0 ? "done" : ""}">1 · Desligar</span><span class="${this.s.repairStep > 1 ? "done" : ""}">2 · Ajustar</span><span>3 · Religar</span></div><div class="recipe-options"><button id="off">Desligar a energia</button><button id="wire">Apertar o conector</button><button id="on">Religar e testar</button></div><p class="muted">Etapa ${this.s.repairStep + 1} de 3 · O forno precisa estar frio e vazio.</p>`,
+        "Daniel trouxe a caixa de ferramentas",
+        `<p>“Desligue. Ajuste o contato. Só depois religue.”</p><div class="repair-diagram"><span>⌁ ENERGIA</span><span>◇ CONTATO</span><span>♨ TESTE</span></div><p>Etapa ${this.s.repairStep + 1}/3</p><div class="actions"><button id="off">Desligar</button><button id="wire">Apertar contato</button><button id="on">Religar</button></div>`,
       ),
       "repair",
     );
     this.closable();
     for (const id of ["off", "wire", "on"])
       this.button(id, () => {
-        if (id !== expected) {
-          this.toast(
-            "Daniel: “Calma. Vamos seguir a ordem, por segurança.”",
-            true,
-          );
+        if (id !== ["off", "wire", "on"][this.s.repairStep]) {
+          this.toast("Daniel: “Calma. Uma coisa de cada vez.”", true);
           return;
         }
         this.s.repairStep++;
+        sound("box");
         if (this.s.repairStep === 3) {
           this.s.repaired = true;
           this.close();
@@ -404,67 +427,48 @@ export class UI {
             [
               {
                 who: "daniel",
-                text: "Pronto. Ouviu? Esse é o som certo. E você levou jeito.",
+                text: "Pronto. Agora parece forno, não chaleira. Você levou jeito.",
               },
               {
                 who: "hero",
-                text: "Obrigado, Daniel. A próxima é por minha conta.",
-              },
-              {
-                who: "daniel",
-                text: "De calabresa? Seu avô deixou a receita. Eu… lembro do cheiro.",
+                text: "Deu certo. E eu não precisei fingir que entendo de fios.",
               },
             ],
-            () => {
-              this.scene.persist();
-              this.toast("Forno consertado · receita de Calabresa disponível!");
-            },
+            () => this.scene.persist(),
           );
-        } else {
-          this.scene.persist();
-          this.repair();
-        }
+        } else this.repair();
+        this.scene.persist();
       });
   }
   sleep() {
     this.set(
       this.frame(
-        "O DIA CABE NA MEMÓRIA",
-        "Apagar as luzes?",
-        `<p>Você atendeu <b>${this.s.dailyServed} clientes</b> hoje.<br>Os ingredientes ficam guardados para amanhã.</p><p class="muted">Pizzas em preparo são encerradas ao dormir. O jogo será salvo.</p>`,
-        `<div class="row"><button id="stay">Ainda quero passear</button><button id="sleep" class="primary">Dormir →</button></div>`,
+        "Fechar os olhos?",
+        `<p>${this.s.dailyServed} pedidos concluídos hoje.<br>Amanhã a cozinha acorda com você.</p><small>Pizzas em preparo são encerradas ao dormir.</small>`,
+        `<button id="sleep">Dormir até amanhã →</button>`,
       ),
       "sleep",
     );
     this.closable();
-    this.button("stay", () => this.close());
     this.button("sleep", () => this.scene.sleep());
   }
-  help(fromMenu = false) {
+  help(menu = false) {
     this.set(
       this.frame(
-        "PARA SE SENTIR EM CASA",
-        "Um pequeno guia de Valdora",
-        `<div class="journal-grid"><div><h3>Seu dia</h3><p><kbd>WASD</kbd> ou <kbd>↑↓←→</kbd> caminhar<br><kbd>E</kbd> interagir com o objeto mais próximo<br><kbd>Enter</kbd> / <kbd>Espaço</kbd> avançar falas<br><kbd>I</kbd> inventário e receitas<br><kbd>Esc</kbd> fechar painéis</p><p>Portas são interativas. Para encerrar o dia, suba ao apartamento e use a cama. O relógio para nas conversas; às 23h50 ele espera por você.</p><h3>Uma pizza de cada vez</h3><p>Converse com o cliente → bancada → ingredientes → montar → forno → retirar no verde → cliente. O pedido fica no canto da tela.</p><p>Uma pizza crua ou queimada rende menos, mas conta para o dia. Se errou a receita, você pode descartar a pizza no caderno de ajuda.</p><button id="discard-pizza">Descartar pizza atual</button></div><div><h3>Créditos</h3><p>Personagens: Universal LPC Spritesheet Character Generator e seus artistas. <a href="/assets/hero-credits-credits.txt" target="_blank">Protagonista</a> · <a href="/assets/rosa-credits-credits.txt" target="_blank">Rosa</a> · <a href="/assets/lia-credits-credits.txt" target="_blank">Lia</a> · <a href="/assets/daniel-credits-credits.txt" target="_blank">Daniel</a>.</p><p>Cenários: LimeZu — Serene Village Revamped e Modern Interiors Free v2.2. <a href="/assets/Modern-Interiors-LICENSE.txt" target="_blank">Modern Interiors Free: licença não comercial</a>.</p><p>Retratos: fornecidos pelo criador do projeto.<br>Efeitos sonoros: síntese original via Web Audio.</p><button id="sound">Som: ${muted ? "desligado" : "ligado"}</button><p class="muted">Salvamento local automático. Limpar os dados do navegador apaga a partida.</p></div></div>`,
+        "Um guia para se sentir em casa",
+        `<div class="journal-grid"><div><h3>Controles</h3><p>WASD / setas · andar<br>Shift · correr<br>E · conversar / usar<br>I · caderno<br>Enter / espaço · texto<br>Esc · voltar</p><p>Entre nas portas caminhando. Suba ao apartamento e use a cama para avançar o dia.</p><h3>Uma pizza</h3><p>Cliente → bancada → arrastar ingredientes → forno → retirar no ponto → servir.</p><h3>Entrega</h3><p>Telefone → cozinhar → embalar → seguir o marcador → E no endereço correto.</p></div><div><h3>Créditos</h3><p>Mundo LPC: Lanea Zimmerman (Sharm) e Daniel Armstrong (HughSpectrum), CC BY-SA 3.0.</p><p>Personagens: Universal LPC. <a href="/assets/hero-credits-credits.txt" target="_blank">Autores do protagonista</a>, <a href="/assets/rosa-credits-credits.txt" target="_blank">Rosa</a>, <a href="/assets/lia-credits-credits.txt" target="_blank">Lia</a>, <a href="/assets/daniel-credits-credits.txt" target="_blank">Daniel</a>.</p><p>Retratos fornecidos pelo criador. Efeitos e ambiente sonoro sintetizados para Valdora.</p><a href="/assets/lpc/LICENSE-CC-BY-SA-3.0.txt" target="_blank">Licença dos cenários</a><p>O save anterior permanece intacto. Esta edição usa um novo slot.</p><button id="sound">Som ${muted ? "desligado" : "ligado"}</button></div></div>`,
       ),
       "help",
     );
-    this.button("close", () => (fromMenu ? this.menu() : this.close()));
+    this.button("close", () => (menu ? this.menu() : this.close()));
     this.button("sound", () => {
       toggleSound();
-      this.help(fromMenu);
-    });
-    this.button("discard-pizza", () => {
-      discard(this.s);
-      this.scene.persist();
-      this.toast(
-        "Pizza descartada. Ingredientes de uma montagem inacabada foram devolvidos.",
-      );
+      this.help(menu);
     });
   }
   conclusion() {
     this.set(
-      `<section class="ending panel"><span class="eyebrow">PIZZARIA DO ANTÔNIO · PRIMEIRA SEMANA</span><div class="logo-mark">✦</div><h1>Uma mesa cheia<br>de recomeços.</h1><p>Você devolveu à casa o seu melhor ingrediente: gente.</p><div class="stats"><div><b>${this.s.sold}</b><span>pizzas vendidas</span></div><div><b>R$ ${this.s.earned}</b><span>dinheiro ganho</span></div><div><b>${this.s.customers}</b><span>clientes atendidos</span></div></div><blockquote>Fim da primeira semana. Esta é apenas a primeira fatia da sua história.</blockquote><button id="back-menu" class="primary">Guardar essa história →</button></section>`,
+      `<section class="rpg-panel ending"><span class="overline">O ANTÔNIO TERIA GUARDADO UMA MESA</span><h2>A primeira semana</h2><p>A casa voltou a ter cheiro de pizza.<br>E a cidade voltou a ter um lugar para ficar.</p><div class="summary"><div><b>${this.s.sold}</b>pizzas</div><div><b>${this.s.deliveries}</b>entregas</div><div><b>R$ ${this.s.earned}</b>recebidos</div></div><p class="final-line">Fim da primeira semana. Esta é apenas a primeira fatia da sua história.</p><button id="back-menu">Guardar esta história →</button></section>`,
       "ending",
     );
     this.button("back-menu", () => {

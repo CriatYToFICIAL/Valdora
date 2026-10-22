@@ -1,30 +1,51 @@
-# Créditos e termos dos recursos
+# Créditos — edição LPC reconstruída
 
-## Personagens LPC
+## Cenários LPC
 
-Criados pelo usuário no [Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator). Os sprites originais foram preservados, incluindo ZIPs, configurações e créditos de cada camada. O jogo utiliza os PNGs `standard/walk.png` e `standard/idle.png` extraídos sem alterações de pixels.
+**Fonte oficial:** [OpenGameArt / LiberatedPixelCup](https://github.com/OpenGameArt/LiberatedPixelCup), commit `f61104a1ecc54e7bce54b82ada7d7ba4c41bc524`.
 
-As atribuições completas de autores, links e opções de licença estão em:
+- **Lanea Zimmerman (Sharm):** `house`, `inside`, `kitchen`, `country`, `cabinets`, `stairs`, `grass`, `dirt`, `treetop`, `trunk`, `barrel` e `signs`.
+- **Daniel Armstrong (HughSpectrum):** `castlefloors`.
+
+São 13 PNGs copiados sem alteração dos pixels originais. O [manifesto](public/assets/lpc/manifest.json) registra nome local, caminho original, autor, URL, commit e SHA-256 de cada arquivo. Os nomes locais `tree.png` e `floors.png` correspondem a `treetop.png` e `castlefloors.png`.
+
+O repositório oferece CC BY-SA 3.0 / GPL 3.0. **Nesta edição é escolhida CC BY-SA 3.0 para esses recursos.** Ela permite uso comercial e adaptação, exige atribuição, indicação das alterações e compartilhamento das adaptações da arte sob a mesma licença. Não significa domínio público nem licença comercial irrestrita.
+
+Texto completo: [CC BY-SA 3.0](public/assets/lpc/LICENSE-CC-BY-SA-3.0.txt). [Autores originais](public/assets/lpc/AUTHORS.md).
+
+**Adaptações visuais de Valdora:** recortes em tempo de execução, composição modular das casas, interiores, caminhos e jardins; tintas de fachada; máscaras e projeções de sombra; luz de janelas; integração de forno, bancadas e outros detalhes originais. As composições e adaptações da arte LPC desta edição são disponibilizadas sob CC BY-SA 3.0, com seus arquivos-fonte de montagem no repositório (`src/maps.ts` e módulos de renderização). Isso não altera os direitos dos demais recursos ou do código de sistemas.
+
+As páginas OpenGameArt e Kenney retornaram HTTP 403 na máquina de desenvolvimento. Não se afirma que os pacotes individuais listados na proposta foram baixados. O subconjunto utilizado veio do repositório oficial acima, cuja licença e autores foram inspecionados.
+
+## Personagens originais do projeto
+
+Protagonista, Dona Rosa, Lia e Daniel foram fornecidos pelo criador de Valdora, usando o [Universal LPC Spritesheet Character Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator).
+
+Os ZIPs originais, configurações e spritesheets completos estão preservados em `ProjetoValdora`. O jogo usa arquivos `standard/walk.png` e `standard/idle.png` extraídos byte a byte, sem substituir os personagens.
+
+Autores, camadas, links, notas e licenças completas:
 
 - [Protagonista](public/assets/hero-credits-credits.txt)
 - [Dona Rosa](public/assets/rosa-credits-credits.txt)
 - [Lia](public/assets/lia-credits-credits.txt)
 - [Daniel](public/assets/daniel-credits-credits.txt)
 
-Os CSVs e metadados dos quatro personagens também estão em `public/assets`. Entre os autores listados estão bluecarrot16, ElizaWy, JaidynReiman, BenCreating, Redshrike, wulax, Mandi Paugh e os demais colaboradores explicitados nos arquivos por camada. Esses arquivos são a referência completa; não se atribui uma licença única a todo o pacote. Há camadas OGA-BY 3.0 e camadas com opções CC-BY/GPL, conforme os registros originais. Redistribuições precisam observar esses termos e preservar a atribuição.
+Entre os artistas estão bluecarrot16, ElizaWy, JaidynReiman, Benjamin K. Smith (BenCreating), Stephen Challener (Redshrike), Johannes Sjölund (wulax), Mandi Paugh e os demais nomes registrados por camada nos arquivos originais. Os CSVs e metadados também estão preservados.
 
-## Cenários
-
-**LimeZu**, [Serene Village Revamped](https://limezu.itch.io/serenevillagerevamped), versão fornecida 1.9. Imagem utilizada: `Serene_Village_16x16.png`, 304×720. O ZIP fornecido não contém arquivo de licença. Os originais estão preservados; a ausência do arquivo não significa domínio público. Confirmar os termos com o autor para redistribuição/publicação.
-
-**LimeZu**, [Modern Interiors](https://limezu.itch.io/moderninteriors), edição fornecida **Free v2.2**. Imagens utilizadas: `Interiors_free_16x16.png`, 256×1424, e `Room_Builder_free_16x16.png`, 272×368.
-
-O texto original [LICENSE.txt](public/assets/Modern-Interiors-LICENSE.txt) permite uso e edição em projetos **não comerciais**, proíbe uso comercial e revenda dos sprites editados. Uma licença de outra edição do pacote não foi presumida. Esta condição precisa ser resolvida antes de uma versão comercial do jogo.
+As opções variam por camada, incluindo OGA-BY 3.0, CC-BY 3.0, CC-BY-SA 3.0 e CC0. Não se impõe uma licença única a todo o personagem. Todas as atribuições originais permanecem no pacote. Referências dos termos: [OGA-BY 3.0](https://static.opengameart.org/OGA-BY-3.0.txt), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) e [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
 
 ## Retratos
 
-PNG RGBA de Dona Rosa, Lia e Daniel fornecidos pelo criador de Valdora em `ProjetoValdora/RetratoMaisDetalhadoDosPersonagens/`. Exibidos sem mudança de proporção, cor ou transparência. Nenhuma licença adicional foi incluída; direitos permanecem com os respectivos titulares.
+Retratos RGBA de Rosa, Lia e Daniel fornecidos pelo criador do projeto. Exibidos com proporção e transparência originais. Os direitos permanecem com seus respectivos titulares; não se atribui uma licença de terceiros presumida a esses arquivos.
 
-## Código, interface e som
+## Elementos e áudio de Valdora
 
-Implementação original deste protótipo, sobre Phaser (MIT), Vite (MIT) e TypeScript (Apache-2.0). Consulte também as licenças dos respectivos pacotes. Os efeitos sonoros são sintetizados em tempo de execução, sem bibliotecas de áudio externas. O diagrama de ingredientes foi implementado em canvas para permitir a montagem interativa.
+Caixas, telefone, pequenos detalhes de jardim, montagem interativa da pizza e interface foram implementados para o projeto. Não foram copiados de Stardew Valley, Fields of Mistria ou Good Pizza, Great Pizza. As imagens desses jogos foram usadas somente como referências de composição, escala e atmosfera.
+
+Todos os efeitos e o ambiente sonoro desta edição são sintetizados em execução via Web Audio. Não foram importados arquivos Kenney, músicas ou sons de outros jogos.
+
+Phaser: Richard Davey / Photon Storm e contribuidores, licença MIT. Vite e TypeScript são ferramentas de desenvolvimento com suas próprias licenças. O aviso do Phaser acompanha o pacote jogável em `assets/legal/phaser-LICENSE.md`.
+
+## Recursos aposentados
+
+**Modern Interiors Free v2.2** (não comercial) e **Serene Village Revamped** não são recursos do produto reconstruído. A versão anterior e seus arquivos permanecem recuperáveis pelo commit `7f2cca5` / branch `archive/prototipo-v1`. Nenhum desses PNGs é incluído no novo build ou no ZIP jogável.

@@ -1,114 +1,118 @@
-# Valdora — A primeira fatia
+# Valdora — A primeira fatia · reconstrução LPC
 
-Protótipo jogável em português brasileiro, feito com TypeScript, Phaser 3.90 e Vite 7. Uma semana para devolver vida à pizzaria do avô Antônio.
+Uma pequena cidade, uma pizzaria herdada e sete dias para encontrar o caminho de casa. Jogo 2D top-down para navegador em português brasileiro, com os quatro personagens LPC e retratos originais do projeto.
 
-## Iniciar
+Esta edição reconstrói o mundo, a interface e a simulação. Os cenários usam um subconjunto do **Liberated Pixel Cup oficial**, com licença **CC BY-SA 3.0**. **Modern Interiors e Serene Village não são carregados nem distribuídos no pacote jogável desta edição.** Veja [CREDITS.md](CREDITS.md).
 
-Requer Node.js **22.12+** (validado com Node 24) e npm.
+## Jogar sem instalar Node
+
+Baixe [`downloads/Valdora-jogavel.zip`](downloads/Valdora-jogavel.zip), extraia a pasta **Valdora-LPC** e abra `JOGAR.cmd` no Windows ou execute, no Linux/macOS:
+
+```bash
+python3 JOGAR.py
+```
+
+O iniciador usa apenas Python 3, abre o navegador e mantém um servidor no seu próprio computador. Deixe o terminal aberto. Para detalhes, consulte [COMO_TESTAR.md](COMO_TESTAR.md). O ZIP só aparece no repositório depois da geração do pacote de produção.
+
+## Desenvolver
+
+Requer Node.js **22.12+** e npm; `.nvmrc` seleciona Node 22 para quem usa nvm.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Abra o endereço indicado pelo Vite no seu navegador. Para gerar e servir uma versão de produção:
-
-```bash
-npm run build
-npm run preview
-```
-
-Não há backend, chaves, contas ou serviços externos. Depois de instalar as dependências, o jogo e todos os recursos são servidos localmente. É necessário teclado; não há controles de toque nesta versão.
-
-## Jogar
-
-- **WASD / setas:** caminhar.
-- **E:** interagir com a porta, personagem ou objeto mais próximo. O nome da interação aparece embaixo.
-- **Enter / Espaço:** próxima fala. Também é possível clicar no botão.
-- **I:** inventário, receitas e progresso.
-- **Esc:** fechar painéis.
-
-Escolha um nome no menu. A pizzaria é a casa de telhado vermelho acima do ponto de chegada. A mercearia fica à direita. No salão, as escadas à direita levam ao apartamento; a cama encerra o dia após cumprir o objetivo.
-
-### Uma pizza, do pedido à mesa
-
-1. Converse com o cliente indicado no painel de objetivo.
-2. Vá à bancada no fundo do salão. Selecione a receita e adicione os ingredientes certos.
-3. Confirme a montagem e caminhe até o forno à esquerda.
-4. Coloque a pizza. Ela continua assando com o painel do forno aberto ou enquanto você anda pelo mundo.
-5. Retire na faixa verde: **16–25 segundos** no forno original, **9–18 segundos** após a melhoria.
-6. Volte ao cliente e pressione E para entregar. O pedido rende dinheiro; uma pizza perfeita e rápida rende gorjeta.
-
-Receitas erradas não são entregues automaticamente. Uma montagem inacabada pode ser reiniciada com devolução dos ingredientes. No botão **?**, é possível descartar qualquer pizza atual. Pizzas cruas ou queimadas rendem menos, mas contam para a progressão.
-
-### Os sete dias
-
-| Dia | História e objetivo                                                      |
-| --- | ------------------------------------------------------------------------ |
-| 1   | Chegada, conversa com Rosa, oito tarefas de limpeza, caderno e descanso. |
-| 2   | Primeira pizza, servida para Dona Rosa.                                  |
-| 3   | Abertura, três pedidos.                                                  |
-| 4   | Lia, Margherita, visita à mercearia e quatro pedidos.                    |
-| 5   | Conserto interativo com Daniel, Calabresa e quatro pedidos.              |
-| 6   | Cinco pedidos e melhoria opcional do forno por R$ 80.                    |
-| 7   | Comemoração com os três amigos, três pedidos, carta do avô e resumo.     |
-
-São **20 pedidos** ao todo. O ritmo depende da exploração e leitura; a duração de 30–60 minutos é uma meta de design, ainda precisa de medição com jogadores. Não há fim automático do expediente: às 23h50 o relógio aguarda você. O relógio e o forno pausam em conversas e painéis de consulta; o painel do próprio forno mantém o cozimento ativo.
-
-Rosa deixa uma reposição básica diária. Se faltar um ingrediente do pedido, a cesta solidária da mercearia oferece um kit gratuito. Isso permite recuperar erros sem reiniciar a semana. A melhoria é opcional e não bloqueia a história.
-
-## Salvamento
-
-Salvamento automático em `localStorage`, chave `valdora.week.v1`: dia, horário, nome, posição, dinheiro, ingredientes, receitas, limpeza, história, conserto, melhoria, pedidos, pizza e estatísticas. Salva nas interações, mudanças de dia e periodicamente. **Continuar** restaura a partida, inclusive uma pizza no forno; o tempo fechado não queima a pizza. Uma nova partida substitui o slot depois da confirmação no formulário de nome. Limpar os dados do navegador apaga a partida. Saves inválidos são ignorados; armazenamento indisponível é indicado na interface.
-
-## Estrutura
-
-- `src/data.ts`: diálogos, personagens, calendário narrativo, ingredientes e receitas.
-- `src/state.ts`: estado serializável e regras puras de inventário, cozinha, pedidos, economia, calendário e salvamento.
-- `src/maps.ts`: composição dos quatro mapas com recortes dos tilesets, colisões e pontos de interação.
-- `src/world.ts`: cena Phaser, personagens, animações, câmera, movimento, transições e coordenação da história.
-- `src/ui.ts`: menus, retratos, diálogos, inventário, compras e painéis de interação.
-- `src/pizza-art.ts`: diagrama interativo de montagem em resolução de 64 pixels.
-- `src/audio.ts`: efeitos sintetizados locais; botão de som no guia.
-- `ProjetoValdora/`: arquivos originais fornecidos, preservados.
-- `public/assets/`: recursos extraídos, créditos e relatório de inspeção.
-
-Os assets de execução já estão incluídos. Para refazer a extração a partir dos ZIPs originais, use `npm run assets` com Python 3 e Pillow instalados. O script não altera os originais e verifica o tamanho e as células preenchidas das animações.
-
-## Recursos e proporções
-
-Os quatro spritesheets completos medem **832×3456**. Os ZIPs contêm arquivos `standard/walk.png` e `standard/idle.png` separados, ambos **832×256**, com células **64×64** e 13 colunas. A inspeção do canal alfa confirmou caminhada nas colunas **0–8** e idle nas colunas **0–1**; as demais colunas são transparentes. As quatro linhas são **cima, esquerda, baixo, direita**. O jogo usa os arquivos separados e não os índices dos spritesheets completos.
-
-Personagens no mundo usam escala 1, base dos pés como âncora e ordenação por profundidade. Os tiles de **16×16** são ampliados por 2; as fachadas por 3 para aproximar portas da altura dos personagens. Sem interpolação. Os retratos originais RGBA têm dimensões diferentes (Rosa 1263×1245, Lia 1292×1217, Daniel 1310×1201) e são exibidos com `object-fit: contain`, preservando proporção e transparência. A interface de montagem usa pixels desenhados em um canvas de 64×64 porque os pacotes não contêm camadas separadas para os ingredientes.
-
-Confira [CREDITS.md](CREDITS.md) antes de redistribuir ou comercializar.
-
-## Validação
+Abra o endereço mostrado pelo Vite **na mesma máquina em que o servidor está rodando**. O `localhost` de uma máquina cloud não aponta para o seu computador. Este projeto não depende de backend, chaves, serviços externos ou downloads durante a partida.
 
 ```bash
 npm test
 npm run build
+npm run package:game
 ```
 
-Os testes de regras cobrem a semana inteira, receitas, consumo e devolução, cozimento, economia, recuperação de falta de ingredientes, progressão e salvamento.
+O último comando gera o ZIP jogável a partir de `dist`. A pasta `dist` não precisa ser versionada; o pacote em `downloads` inclui o build, o iniciador e os créditos.
 
-O [registro da validação executada](docs/VALIDACAO.md) inclui resultados, limites da automação e capturas do jogo.
+## Controles
 
-Com o servidor de desenvolvimento ativo e Chromium instalado:
+| Tecla / gesto                     | Ação                                                    |
+| --------------------------------- | ------------------------------------------------------- |
+| WASD / setas                      | Andar em oito direções                                  |
+| Shift                             | Correr                                                  |
+| Caminhar pela porta               | Entrar ou sair automaticamente                          |
+| E                                 | Conversar, limpar, usar equipamentos, servir e entregar |
+| Enter / espaço                    | Revelar a fala inteira ou avançar                       |
+| I                                 | Caderno, receitas, inventário e estatísticas            |
+| Esc                               | Fechar painel / abrir guia                              |
+| Arrastar ingrediente para a pizza | Montagem na bancada                                     |
+| Teclas 1–5 na bancada             | Alternativa acessível ao arraste                        |
+
+## Primeira semana
+
+| Dia | História e jogo                                                                                                                                                                              |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Caminhe até a pizzaria, conheça Rosa, conclua oito tarefas de limpeza, encontre o caderno e durma no apartamento. As cadeiras são recolocadas; caixas e sujeira desaparecem permanentemente. |
+| 2   | Rosa ensina a primeira receita e faz o pedido de teste.                                                                                                                                      |
+| 3   | Inauguração: três pedidos no balcão, com clientes que chegam e saem.                                                                                                                         |
+| 4   | Lia, Margherita, compra de ingredientes e primeira entrega por telefone.                                                                                                                     |
+| 5   | Daniel ajuda no conserto do forno em três etapas; receita de Calabresa e mais uma entrega.                                                                                                   |
+| 6   | Cinco pedidos, entrega e melhoria opcional do forno por R$ 80.                                                                                                                               |
+| 7   | Festa com os três moradores, últimos pedidos e entrega, mensagem do avô e resumo.                                                                                                            |
+
+São **20 pedidos, incluindo quatro entregas**. Entre as tarefas, você pode conversar, explorar a praça, entrar nas lojas e visitar os moradores. O dia avança pela cama do apartamento. Os objetivos essenciais impedem pular acidentalmente a história.
+
+### Cozinhar e atender
+
+O cliente caminha até o balcão. Converse com E para anotar o pedido. A bancada fica atrás do balcão; há uma passagem à direita. Arraste massa, molho, queijo e os complementos corretos para a pizza. Manjericão e Calabresa podem ser distribuídos em vários pontos usando a mesma porção. Use E para terminar a montagem.
+
+Leve ao forno e pressione E para colocar. A pizza continua assando enquanto você anda. O indicador sobre o forno muda no ponto certo: **16–25 segundos**, ou **9–18** após a melhoria. Pressione E novamente para retirar e volte ao cliente. Uma pizza fora do ponto rende menos e recebe uma reação diferente, mas não bloqueia o dia.
+
+O caderno permite descartar uma pizza incorreta. Uma montagem inacabada devolve seus ingredientes. Rosa repõe os ingredientes básicos a cada manhã; a mercearia possui um kit gratuito para recuperar a falta de ingredientes do pedido.
+
+### Entregar
+
+Quando o telefone tocar, use E na ponta direita do balcão. Prepare a receita, asse e use a bancada **à esquerda do forno** para embalar. A caixa aparece nas mãos do protagonista. Saia caminhando pela porta e siga o marcador dourado até o endereço. Use E junto à entrada correta, ou converse com o destinatário dentro da residência. A entrega só paga no destino correto e só pode ser concluída uma vez. Não há prazo de falha punitivo.
+
+## Um mundo que continua fora da câmera
+
+Cada morador tem uma identidade global e um único estado: mapa, posição, direção, caminho e atividade. O renderizador só desenha quem está no mapa atual. Rotinas de trabalho, praça, visitas e casa continuam sendo simuladas nos outros mapas.
+
+Os moradores usam os mesmos colisores dos pés e descrições de obstáculos que o protagonista. As rotas evitam móveis e portas que não sejam o destino. Eventos essenciais têm prioridade sobre os horários: Rosa acompanha a restauração; Daniel permanece até o conserto; a festa reúne os três. Isso evita perder um NPC obrigatório por estar tarde.
+
+O relógio percorre manhã, tarde, entardecer, noite e madrugada. A iluminação interpola cor e intensidade, com máscaras radiais para janelas, postes e forno, emissão quente de janelas e sombras projetadas. A sombra do protagonista usa a silhueta do frame atual; direção e extensão consideram sol ou fonte local próxima. Interiores recebem outro tratamento de luz. Não há simulação física de sombras 3D.
+
+Efeitos e ambiente sonoro são sintetizados localmente: passos, portas, limpeza, cozinha, forno, moedas, telefone, caixas e menus; pássaros de dia e grilos à noite. O som pode ser desligado no guia. As bibliotecas externas de áudio não foram baixadas, pois as páginas retornaram bloqueio de rede.
+
+## Salvamento e recuperação da versão anterior
+
+O novo slot é `valdora.week.v2`, em `localStorage`. Registra dia, horário, mapa, posição, ingredientes, receitas, dinheiro, pedidos, pizza, entregas, NPCs, limpeza, conserto, melhoria e eventos. Salva nas interações e periodicamente. O tempo com o jogo fechado não queima pizzas.
+
+Se existir um save v1 no **mesmo endereço e porta**, ele pode ser lido e convertido para um ponto seguro no novo mapa, mantendo dinheiro, inventário e história. O slot v1 permanece intacto. Navegadores e endereços/portas diferentes possuem armazenamentos separados.
+
+A implementação anterior está no commit `7f2cca5` e na branch `archive/prototipo-v1`. Ela inclui os recursos e a documentação antigos para recuperação; não corresponde ao produto reconstruído.
+
+## Arquitetura
+
+- `maps.ts`: composição LPC, geometria, entradas, endereços e estações.
+- `navigation.ts`: colisores dos pés, deslizamento e busca de caminhos.
+- `actors.ts`: identidades, rotinas, prioridades narrativas e viagens entre mapas.
+- `world.ts`: cena Phaser, controles, animações, interações e coordenação.
+- `state.ts`: regras serializáveis de receitas, pedidos, economia, calendário e save/migração.
+- `data.ts`: receitas, ingredientes, moradores e diálogos da semana.
+- `lighting.ts`, `shadows.ts`, `object-shadows.ts`: ambiente, luzes e projeções.
+- `ui.ts`, `game.css`, `pizza-art.ts`: HUD compacto, diálogos, retratos e bancada interativa.
+- `audio.ts`: efeitos e ambiente gerados via Web Audio.
+
+Os PNGs dos personagens e os retratos não foram alterados. O script `npm run assets` extrai novamente somente os personagens originais. `scripts/import_lpc.py` reproduz a importação do subconjunto de cenários a partir do repositório oficial; o manifesto inclui SHA-256, autores, caminhos, commit e licença.
+
+## Validação e limites
+
+Consulte [docs/RECONSTRUCAO.md](docs/RECONSTRUCAO.md) para auditoria, origem dos recursos e etapas, e [docs/VALIDACAO.md](docs/VALIDACAO.md) para os testes efetivamente executados e as capturas. Com o servidor dev ativo:
 
 ```bash
-node scripts/browser-qa.mjs
+QA_URL=http://127.0.0.1:5173 npm run test:browser
 ```
 
-O teste usa `/usr/bin/chromium` por padrão; `CHROMIUM_PATH`, `QA_URL` e `QA_OUTPUT` permitem alterar navegador, servidor e diretório de capturas. Exercita botões, diálogos, limpeza, compras, conserto, melhoria, 20 pedidos e conclusão; recarrega a página durante a semana e ao final. Verifica movimento por teclado, colisão de borda e acessibilidade dos pontos de interação por busca no mapa de colisões. Para reduzir a duração, posiciona o personagem junto aos pontos de interação e acelera os cozimentos após a primeira pizza, que é assada em tempo de jogo real. Portanto, não equivale a uma sessão manual integral ou a um teste de duração com jogadores.
+O script usa Chromium em `/usr/bin/chromium` (ajustável por `CHROMIUM_PATH`). A primeira porta e o primeiro cozimento são testados em tempo real; depois, rotas do motor e tempos de simulação são acelerados. Posicionamentos auxiliares aproximam o personagem das estações para testar as interações. Isso não equivale a um playtest humano integral.
 
-## Limites desta versão
-
-- Um pedido ativo por vez, usando os três NPCs fornecidos como clientes recorrentes; não há multidão ou sistema de filas.
-- Rotina dos moradores simples; sem pathfinding ou agenda individual completa. A saída após atendimento é animada.
-- Limpeza instantânea por interação e conserto em três etapas; sem minijogos complexos.
-- Mapas compactos, áudio de feedback e sem trilha musical. Sem controles de toque.
-- A duração e a dificuldade precisam de playtest humano; a automação garante regras e percurso narrativo, não a qualidade subjetiva do ritmo.
-- **Modern Interiors Free v2.2 é somente não comercial.** O ZIP de Serene Village não inclui texto de licença: confirme os termos da distribuição com LimeZu antes de publicar. Originais e créditos individuais LPC foram preservados.
-
-Não foram desenvolvidos agricultura, romance, expansão urbana, multiplayer ou administração avançada.
+Esta é uma região compacta, com três moradores e um pedido ativo por vez. As sombras são aproximações 2D. O tempo dos eventos, a qualidade subjetiva do som e o equilíbrio para jogadores iniciantes ainda precisam de avaliação humana. Não há toque/mobile, romances, agricultura, multiplayer ou expansão urbana.

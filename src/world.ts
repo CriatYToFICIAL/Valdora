@@ -5,7 +5,6 @@ import {
   names,
   recipes,
   smallTalk,
-  type Person,
   type Place,
 } from "./data";
 import {
@@ -14,7 +13,6 @@ import {
   cleaning,
   fresh,
   introDone,
-  load,
   nextDay,
   objective,
   ovenTime,
@@ -26,27 +24,54 @@ import {
   tick,
   type State,
 } from "./state";
-import { buildMap, locations, type MapResult, type Spot } from "./maps";
+import {
+  buildMap,
+  buildings,
+  locations,
+  type MapData,
+  type Spot,
+  type Door,
+} from "./maps";
+import { inside, slide } from "./navigation";
+import { ids, updateResidents, type NpcId } from "./actors";
+import { Lighting } from "./lighting";
+import { SilhouetteShadow } from "./shadows";
+import { ObjectShadows } from "./object-shadows";
+import { atmosphere } from "./lighting";
 import { UI } from "./ui";
-import { sound } from "./audio";
+import { sound, ambience } from "./audio";
 export class ValdoraScene extends Phaser.Scene {
   state: State = fresh("Alex");
   ui!: UI;
   running = false;
   saveFailed = false;
   hero!: Phaser.GameObjects.Sprite;
-  shadow!: Phaser.GameObjects.Ellipse;
-  carry!: Phaser.GameObjects.Text;
-  map!: MapResult;
+  map!: MapData;
+  lighting!: Lighting;
+  heroShadow!: SilhouetteShadow;
+  objectShadows!: ObjectShadows;
+  windowGlows: Phaser.GameObjects.Image[] = [];
+  box!: Phaser.GameObjects.Graphics;
   keys!: Record<string, Phaser.Input.Keyboard.Key>;
   direction = 2;
   nearest: Spot | null = null;
-  npcs = new Map<Person, Phaser.GameObjects.Sprite>();
-  bubbles = new Map<Person, Phaser.GameObjects.Text>();
-  private saveTimer = 0;
-  private alarm = false;
-  private transition = false;
-  private bubbleTimer = 0;
+  nearNpc: NpcId | null = null;
+  transition = false;
+  npcs = new Map<NpcId, Phaser.GameObjects.Sprite>();
+  npcShadows = new Map<NpcId, SilhouetteShadow>();
+  npcBubbles = new Map<NpcId, Phaser.GameObjects.Text>();
+  thought!: Phaser.GameObjects.Text;
+  carry!: Phaser.GameObjects.Text;
+  arrow!: Phaser.GameObjects.Text;
+  ovenLabel!: Phaser.GameObjects.Text;
+  ovenMeter!: Phaser.GameObjects.Graphics;
+  private ringClock = 0;
+  private saveClock = 0;
+  private footsteps = 0;
+  private doorLock = 1;
+  private introDelay = 0;
+  private readySignal = false;
+  private thoughtTimer = 0;
   constructor() {
     super("Valdora");
   }
@@ -57,10 +82,24 @@ export class ValdoraScene extends Phaser.Scene {
           frameWidth: 64,
           frameHeight: 64,
         });
-    for (const key of ["village", "interiors", "rooms"])
-      this.load.image(key, `/assets/${key}.png`);
-    this.load.on("loaderror", (file: { key: string }) =>
-      console.error("Falha ao carregar recurso:", file.key),
+    for (const k of [
+      "house",
+      "inside",
+      "kitchen",
+      "country",
+      "cabinets",
+      "stairs",
+      "grass",
+      "dirt",
+      "tree",
+      "trunk",
+      "barrel",
+      "signs",
+      "floors",
+    ])
+      this.load.image(k, `/assets/lpc/${k}.png`);
+    this.load.on("loaderror", (f: { key: string }) =>
+      console.error("Recurso não carregado:", f.key),
     );
   }
   create() {
@@ -77,47 +116,28 @@ export class ValdoraScene extends Phaser.Scene {
             repeat: -1,
           });
     this.keys = this.input.keyboard!.addKeys(
-      "W,A,S,D,UP,DOWN,LEFT,RIGHT,E,ENTER,SPACE,ESC,I",
+      "W,A,S,D,UP,DOWN,LEFT,RIGHT,E,ENTER,SPACE,ESC,I,SHIFT",
     ) as Record<string, Phaser.Input.Keyboard.Key>;
     this.ui = new UI(this);
     this.drawWorld();
     this.ui.menu();
-    this.input.keyboard!.on("keydown", (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement)?.tagName === "INPUT") return;
-      if (event.repeat) return;
-      if (
-        (event.code === "Enter" || event.code === "Space") &&
-        this.ui.mode === "dialogue"
-      ) {
-        event.preventDefault();
-        this.ui.advance();
+    this.input.keyboard!.on("keydown", (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).tagName === "INPUT" || e.repeat) return;
+      if (this.ui.mode) {
+        this.ui.key(e);
         return;
       }
-      if (
-        event.code === "Escape" &&
-        this.ui.mode &&
-        !["menu", "name", "dialogue", "day", "ending"].includes(this.ui.mode)
-      )
-        this.ui.close();
-      if (event.code === "KeyI" && this.running && !this.ui.mode)
-        this.ui.journal();
-      if (
-        event.code === "KeyE" &&
-        this.running &&
-        !this.ui.mode &&
-        !this.transition
-      )
-        this.interact();
+      if (!this.running || this.transition) return;
+      if (e.code === "KeyE") this.interact();
+      if (e.code === "KeyI") this.ui.journal();
+      if (e.code === "Escape") this.ui.help();
     });
-    window.addEventListener("pagehide", () => {
-      if (this.running) this.persist();
-    });
-    // Read-only inspectable scene for browser QA, restricted to Vite's development server.
+    window.addEventListener("pagehide", () => this.persist());
     if (import.meta.env.DEV)
       (window as unknown as { valdora: ValdoraScene }).valdora = this;
   }
   releaseKeys() {
-    if (this.keys) for (const key of Object.values(this.keys)) key.reset();
+    if (this.keys) for (const k of Object.values(this.keys)) k.reset();
   }
   locationName() {
     return locations[this.state.place];
@@ -127,331 +147,626 @@ export class ValdoraScene extends Phaser.Scene {
   }
   startGame(s: State, first = false) {
     this.state = s;
-    this.state.satisfaction ??= 0;
-    startOrder(s);
     this.running = true;
-    this.direction = 2;
+    startOrder(s);
     this.drawWorld();
     this.persist();
     if (s.complete) this.ui.conclusion();
     else if (first) this.ui.dayCard(true);
-    else {
-      this.ui.close();
-      this.checkIntroduction();
-    }
+    else this.ui.close();
+    sound("day");
   }
   drawWorld() {
+    if (this.lighting) this.lighting.destroy();
     this.children.removeAll(true);
     this.npcs.clear();
-    this.bubbles.clear();
+    this.npcShadows.clear();
+    this.npcBubbles.clear();
     this.map = buildMap(this, this.state);
-    for (const spot of this.map.spots.filter((v) => v.kind === "npc")) {
-      this.add
-        .ellipse(spot.x, spot.y + 1, 30, 12, 0x142622, 0.25)
-        .setDepth(spot.y - 1);
-      const sprite = this.add
-        .sprite(spot.x, spot.y + 6, `${spot.person}-idle`, 26)
-        .setOrigin(0.5, 1)
-        .setDepth(spot.y);
-      sprite.play(`${spot.person}-idle-2`);
-      this.npcs.set(spot.person!, sprite);
-      const text = this.add
-        .text(spot.x, spot.y - 66, "", {
-          fontFamily: "monospace",
-          fontSize: 12,
-          color: "#fff0d0",
-          backgroundColor: "#2c473b",
-          padding: { x: 8, y: 5 },
-        })
-        .setOrigin(0.5, 1)
-        .setDepth(spot.y + 100);
-      this.bubbles.set(spot.person!, text);
-    }
-    this.shadow = this.add.ellipse(
-      this.state.x,
-      this.state.y + 1,
-      28,
-      10,
-      0x142622,
-      0.28,
-    );
+    this.objectShadows = new ObjectShadows(this);
+    this.windowGlows = [];
+    if (this.state.place === "street")
+      for (const b of buildings) {
+        for (const [x, sourceX] of [
+          [b.x + 32, 224],
+          ...(b.w >= 224 ? [[b.x + b.w - 64, 256]] : []),
+        ]) {
+          const key = "window-emission-" + sourceX;
+          if (!this.textures.exists(key)) {
+            const texture = this.textures.createCanvas(key, 32, 64)!,
+              ctx = texture.context;
+            ctx.drawImage(
+              this.textures.get("house").getSourceImage() as HTMLImageElement,
+              sourceX,
+              0,
+              32,
+              64,
+              0,
+              0,
+              32,
+              64,
+            );
+            const data = ctx.getImageData(0, 0, 32, 64);
+            for (let i = 0; i < data.data.length; i += 4) {
+              const isPane =
+                data.data[i + 3] > 0 &&
+                data.data[i] < 55 &&
+                data.data[i + 1] < 55 &&
+                data.data[i + 2] < 75;
+              data.data[i] = 255;
+              data.data[i + 1] = 210;
+              data.data[i + 2] = 139;
+              data.data[i + 3] = isPane ? 255 : 0;
+            }
+            ctx.putImageData(data, 0, 0);
+            texture.refresh();
+          }
+          this.windowGlows.push(
+            this.add
+              .image(x, b.y + 105, key)
+              .setOrigin(0)
+              .setDepth(b.y + 194),
+          );
+        }
+      }
     this.hero = this.add
-      .sprite(this.state.x, this.state.y + 6, "hero-idle", 26)
-      .setOrigin(0.5, 1);
-    this.hero.play("hero-idle-2");
+      .sprite(this.state.x, this.state.y + 4, "hero-idle", 26)
+      .setOrigin(0.5, 1)
+      .play(`hero-idle-${this.direction}`);
+    this.heroShadow = new SilhouetteShadow(this, "hero");
+    this.thought = this.add
+      .text(0, 0, "", {
+        fontFamily: "monospace",
+        fontSize: 9,
+        color: "#38342f",
+        backgroundColor: "#f1e5bd",
+        padding: { x: 7, y: 5 },
+        wordWrap: { width: 190 },
+        align: "center",
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(9000)
+      .setVisible(false);
     this.carry = this.add
-      .text(this.state.x, this.state.y - 58, "●", {
-        fontSize: 22,
-        color: "#f1c265",
-        stroke: "#65422c",
-        strokeThickness: 3,
+      .text(0, 0, "", {
+        fontFamily: "monospace",
+        fontSize: 10,
+        color: "#ffe1a0",
+        backgroundColor: "#634e35",
+        padding: { x: 4, y: 2 },
       })
       .setOrigin(0.5)
+      .setDepth(7000);
+    this.box = this.add.graphics();
+    this.box.fillStyle(0x6b472f).fillRect(-10, -6, 21, 13);
+    this.box.fillStyle(0xc39a61).fillRect(-10, -6, 20, 8);
+    this.box.fillStyle(0xe8cb8a).fillRect(-9, -5, 18, 1);
+    this.box.fillStyle(0x8c4c35).fillRect(-3, -3, 7, 4);
+    this.box.fillStyle(0x604333).fillRect(-10, 1, 20, 1);
+    this.arrow = this.add
+      .text(0, 0, "➤", {
+        fontFamily: "monospace",
+        fontSize: 16,
+        color: "#f6d994",
+        stroke: "#3d3a35",
+        strokeThickness: 2,
+      })
+      .setScrollFactor(0)
+      .setDepth(9001)
       .setVisible(false);
+    this.ovenLabel = this.add
+      .text(480, 91, "", {
+        fontFamily: "monospace",
+        fontSize: 8,
+        color: "#f5e3b1",
+        backgroundColor: "#3d3432",
+        padding: { x: 4, y: 3 },
+      })
+      .setOrigin(0.5)
+      .setDepth(7000);
+    this.ovenMeter = this.add.graphics().setDepth(7001);
     this.cameras.main.setBounds(0, 0, this.map.width, this.map.height);
-    this.cameras.main.startFollow(this.hero, true, 0.12, 0.12, 0, 0);
-    this.cameras.main.setBackgroundColor("#192e30");
-    this.nearest = null;
-    this.updateNpcBubbles();
+    this.cameras.main.startFollow(this.hero, true, 0.18, 0.18);
+    this.cameras.main.roundPixels = true;
+    this.lighting = new Lighting(this);
+    this.doorLock = 0.8;
+    this.syncNpcs();
   }
-  checkIntroduction() {
-    if (
-      this.state.place === "pizzeria" &&
-      !this.state.introduced.includes(this.state.day)
-    ) {
-      this.ui.dialogue(introductions[this.state.day], () => {
-        introDone(this.state);
-        this.persist();
-        this.updateNpcBubbles();
-      });
+  syncNpcs() {
+    for (const id of ids) {
+      const r = this.state.npcs[id];
+      let sprite = this.npcs.get(id);
+      if (r.place !== this.state.place) {
+        sprite?.destroy();
+        this.npcs.delete(id);
+        this.npcBubbles.get(id)?.destroy();
+        this.npcBubbles.delete(id);
+        this.npcShadows.get(id)?.image.destroy();
+        this.npcShadows.delete(id);
+        continue;
+      }
+      if (!sprite) {
+        sprite = this.add
+          .sprite(r.x, r.y + 4, `${id}-idle`, 26)
+          .setOrigin(0.5, 1);
+        this.npcs.set(id, sprite);
+        this.npcShadows.set(id, new SilhouetteShadow(this, id));
+        this.npcBubbles.set(
+          id,
+          this.add
+            .text(0, 0, "", {
+              fontFamily: "monospace",
+              fontSize: 8,
+              color: "#f8eac4",
+              backgroundColor: "#4c5140",
+              padding: { x: 4, y: 3 },
+            })
+            .setOrigin(0.5, 1),
+        );
+      }
+      sprite
+        .setPosition(Math.round(r.x), Math.round(r.y + 4))
+        .setDepth(r.y + 4)
+        .play(`${id}-${r.moving ? "walk" : "idle"}-${r.direction}`, true);
+      this.npcShadows
+        .get(id)!
+        .update(
+          sprite,
+          this.state.minute,
+          this.state.place !== "street",
+          this.map.lights,
+        );
+      const o = this.state.order,
+        waiting =
+          o &&
+          o.kind !== "delivery" &&
+          o.person === id &&
+          Math.hypot(r.x - 320, r.y - 286) < 24;
+      this.npcBubbles
+        .get(id)!
+        .setPosition(sprite.x, sprite.y - 65)
+        .setDepth(sprite.y + 10)
+        .setText(
+          waiting
+            ? o!.accepted
+              ? recipes[o!.recipe].name
+              : "Posso pedir?"
+            : "",
+        )
+        .setVisible(!!waiting);
     }
-  }
-  travel(to: Place) {
-    if (this.transition) return;
-    this.transition = true;
-    this.persist();
-    this.ui.hint("");
-    this.cameras.main.fadeOut(180, 21, 40, 38);
-    this.time.delayedCall(190, () => {
-      const from = this.state.place;
-      this.state.place = to;
-      const spawn: Record<Place, [number, number]> = {
-        street: from === "shop" ? [1064, 470] : [472, 476],
-        pizzeria: from === "apartment" ? [920, 610] : [560, 630],
-        apartment: [560, 620],
-        shop: [560, 620],
-      };
-      [this.state.x, this.state.y] = spawn[to];
-      this.drawWorld();
-      this.cameras.main.fadeIn(220, 21, 40, 38);
-      this.transition = false;
-      this.persist();
-      this.checkIntroduction();
-    });
-  }
-  persist() {
-    if (!this.running) return;
-    if (this.hero) {
-      this.state.x = this.hero.x;
-      this.state.y = this.hero.y - 6;
-    }
-    this.saveFailed = !save(this.state);
-  }
-  blocked(x: number, y: number) {
-    return (
-      x < 20 ||
-      x > this.map.width - 20 ||
-      y < 30 ||
-      y > this.map.height - 20 ||
-      this.map.solids.some(
-        (r) =>
-          x + 10 > r.x &&
-          x - 10 < r.x + r.w &&
-          y + 4 > r.y &&
-          y - 7 < r.y + r.h,
-      )
-    );
   }
   update(_time: number, delta: number) {
     if (!this.ui || !this.hero) return;
-    if (!this.running) {
-      this.ui.hint("");
-      return;
-    }
-    const dt = Math.min(delta / 1000, 0.05);
-    const paused = !!this.ui.mode && !["oven"].includes(this.ui.mode);
-    if (!paused && !this.transition) {
+    const dt = Math.min(delta / 1000, 0.07);
+    this.ui.update(dt);
+    if (!this.running) return;
+    const active = !this.ui.mode || this.ui.mode === "thought";
+    if (active && !this.transition) {
       tick(this.state, dt);
-      if (!this.ui.mode) {
-        let dx =
-            Number(this.keys.D.isDown || this.keys.RIGHT.isDown) -
-            Number(this.keys.A.isDown || this.keys.LEFT.isDown),
-          dy =
-            Number(this.keys.S.isDown || this.keys.DOWN.isDown) -
-            Number(this.keys.W.isDown || this.keys.UP.isDown);
-        if (dx || dy) {
-          if (dx) this.direction = dx < 0 ? 1 : 3;
-          else this.direction = dy < 0 ? 0 : 2;
-          const len = Math.hypot(dx, dy);
-          dx = (dx / len) * 170 * dt;
-          dy = (dy / len) * 170 * dt;
-          let x = this.hero.x,
-            y = this.hero.y - 6;
-          if (!this.blocked(x + dx, y)) x += dx;
-          if (!this.blocked(x, y + dy)) y += dy;
-          this.hero.setPosition(x, y + 6);
-          this.hero.play(`hero-walk-${this.direction}`, true);
-        } else this.hero.play(`hero-idle-${this.direction}`, true);
+      if (this.state.order?.kind === "delivery" && !this.state.order.accepted) {
+        this.ringClock += dt;
+        if (this.ringClock > 4) {
+          sound("phone");
+          this.ringClock = 0;
+        }
+      } else this.ringClock = 0;
+      this.doorLock = Math.max(0, this.doorLock - dt);
+      let dx =
+          Number(this.keys.D.isDown || this.keys.RIGHT.isDown) -
+          Number(this.keys.A.isDown || this.keys.LEFT.isDown),
+        dy =
+          Number(this.keys.S.isDown || this.keys.DOWN.isDown) -
+          Number(this.keys.W.isDown || this.keys.UP.isDown);
+      if (dx || dy) {
+        if (Math.abs(dx) > Math.abs(dy)) this.direction = dx < 0 ? 1 : 3;
+        else if (dy) this.direction = dy < 0 ? 0 : 2;
+        const len = Math.hypot(dx, dy),
+          speed = this.keys.SHIFT.isDown ? 172 : 112;
+        [this.state.x, this.state.y] = slide(
+          this.map,
+          this.state.x,
+          this.state.y,
+          (dx / len) * speed * dt,
+          (dy / len) * speed * dt,
+        );
+        this.hero.play(`hero-walk-${this.direction}`, true);
+        this.hero.anims.timeScale = this.keys.SHIFT.isDown ? 1.5 : 1;
+        this.footsteps += dt;
+        if (this.footsteps > (this.keys.SHIFT.isDown ? 0.22 : 0.34)) {
+          sound("step");
+          this.footsteps = 0;
+        }
       } else this.hero.play(`hero-idle-${this.direction}`, true);
+      updateResidents(this.state, dt);
+      if (!this.doorLock) {
+        const door = this.map.doors.find((d) =>
+          inside(this.state.x, this.state.y, d),
+        );
+        if (door) this.travel(door);
+      }
+      this.introDelay += dt;
+      if (this.introDelay > 0.3) {
+        this.introDelay = 0;
+        this.checkIntroduction();
+      }
       if (
         this.state.pizza?.stage === "oven" &&
         this.state.pizza.seconds >= ovenTime(this.state) &&
-        !this.alarm
+        !this.readySignal
       ) {
-        this.alarm = true;
-        sound("good");
-        this.ui.toast("A pizza está no ponto! Retire do forno.");
+        this.readySignal = true;
+        sound("oven");
+        this.ui.toast("A borda dourou. Hora de tirar!");
       }
     } else this.hero.play(`hero-idle-${this.direction}`, true);
-    this.hero.setDepth(this.hero.y);
-    this.shadow
-      .setPosition(this.hero.x, this.hero.y - 5)
-      .setDepth(this.hero.y - 1);
-    this.carry
-      .setPosition(this.hero.x, this.hero.y - 67)
-      .setDepth(this.hero.y + 1)
-      .setVisible(
-        !!this.state.pizza && ["raw", "ready"].includes(this.state.pizza.stage),
-      );
-    this.findNearest();
-    this.ui.hint(
-      !this.ui.mode && this.nearest ? this.spotLabel(this.nearest) : "",
+    this.hero
+      .setPosition(Math.round(this.state.x), Math.round(this.state.y + 4))
+      .setDepth(this.state.y + 4);
+    this.heroShadow.update(
+      this.hero,
+      this.state.minute,
+      this.state.place !== "street",
+      this.map.lights,
     );
-    this.ui.hud();
-    this.ui.updateOven();
-    this.saveTimer += dt;
-    if (this.saveTimer > 4) {
-      this.saveTimer = 0;
-      this.persist();
+    this.syncNpcs();
+    if (this.thoughtTimer > 0) {
+      this.thoughtTimer -= dt;
+      this.thought.setPosition(this.hero.x, this.hero.y - 66);
+      if (this.thoughtTimer <= 0) this.thought.setVisible(false);
     }
-    this.bubbleTimer += dt;
-    if (this.bubbleTimer > 1) {
-      this.bubbleTimer = 0;
-      this.updateNpcBubbles();
-    }
-  }
-  findNearest() {
-    let distance = 88;
-    this.nearest = null;
-    for (const spot of this.map.spots) {
-      const d = Phaser.Math.Distance.Between(
-        this.hero.x,
-        this.hero.y - 6,
-        spot.x,
-        spot.y,
-      );
-      if (d < distance) {
-        distance = d;
-        this.nearest = spot;
-      }
-    }
-  }
-  spotLabel(spot: Spot) {
-    const order = this.state.order;
-    if (spot.kind === "npc" && order && order.person === spot.person)
-      return order.accepted
-        ? "Entregar pedido / conversar"
-        : `Receber pedido de ${names[spot.person!]}`;
-    return spot.label;
-  }
-  updateNpcBubbles() {
-    for (const [p, b] of this.bubbles) {
-      const order = this.state.order;
-      const active = order?.person === p;
-      b.setText(
-        active
-          ? order.accepted
-            ? `Uma de ${recipes[order.recipe].name.toLowerCase()}!`
-            : "Olá! Posso pedir?"
-          : this.state.day === 7
-            ? "Uma semana! ✦"
+    const p = this.state.pizza;
+    this.carry
+      .setPosition(this.hero.x, this.hero.y - 57)
+      .setText(
+        p?.stage === "boxed"
+          ? ""
+          : p && ["ready", "raw"].includes(p.stage)
+            ? "◉ PIZZA"
             : "",
       );
-      b.setVisible(!!b.text);
+    this.box
+      .setPosition(this.hero.x + 8, this.hero.y - 25)
+      .setDepth(this.hero.y + 1)
+      .setVisible(p?.stage === "boxed");
+    this.ovenLabel.setVisible(
+      this.state.place === "pizzeria" && p?.stage === "oven",
+    );
+    this.ovenMeter.clear();
+    if (p?.stage === "oven") {
+      this.ovenLabel.setText(
+        p.seconds < ovenTime(this.state)
+          ? `ASSANDO ${Math.floor(p.seconds)}s`
+          : p.seconds <= ovenTime(this.state) + 9
+            ? "✦ NO PONTO!"
+            : "PASSOU DO PONTO",
+      );
+      const t = ovenTime(this.state),
+        good = p.seconds >= t && p.seconds <= t + 9;
+      this.ovenLabel.setColor(
+        good ? "#bfe18b" : p.seconds > t + 9 ? "#ed9b78" : "#f5e3b1",
+      );
+      if (this.state.place === "pizzeria") {
+        this.ovenMeter.fillStyle(0x554638).fillRect(458, 98, 44, 5);
+        this.ovenMeter
+          .fillStyle(0xa6bd69)
+          .fillRect(459 + (42 * t) / (t + 9), 99, (42 * 9) / (t + 9), 3);
+        this.ovenMeter
+          .fillStyle(0xffebc0)
+          .fillRect(459 + Math.min(41, (42 * p.seconds) / (t + 9)), 97, 1, 7);
+      }
+    }
+    this.findNearest();
+    this.ui.hint(
+      active
+        ? this.nearNpc
+          ? `E · ${names[this.nearNpc]}`
+          : this.nearest
+            ? `E · ${this.nearest.label}`
+            : ""
+        : "",
+    );
+    this.updateDeliveryMarker();
+    this.lighting.update(
+      dt,
+      this.state.minute,
+      this.state.place !== "street",
+      this.map.lights,
+    );
+    this.objectShadows.update(
+      dt,
+      this.state.minute,
+      this.state.place,
+      this.map.lights,
+    );
+    const nightAmount = Math.max(
+      0,
+      (atmosphere(this.state.minute).darkness - 0.16) / 0.65,
+    );
+    for (const glow of this.windowGlows) glow.setAlpha(nightAmount);
+    this.ui.hud();
+    ambience(dt, this.state.minute, this.state.place === "street");
+    this.saveClock += dt;
+    if (this.saveClock > 3) {
+      this.saveClock = 0;
+      this.persist();
+    }
+  }
+  think(text: string, seconds = 3.7) {
+    this.thought.setText(text).setVisible(true);
+    this.thoughtTimer = seconds;
+  }
+  findNearest() {
+    this.nearest = null;
+    this.nearNpc = null;
+    let dist = 45;
+    for (const p of this.map.spots) {
+      const d = Math.hypot(this.state.x - p.x, this.state.y - p.y);
+      if (d < dist) {
+        dist = d;
+        this.nearest = p;
+      }
+    }
+    for (const id of ids) {
+      const r = this.state.npcs[id];
+      if (r.place === this.state.place) {
+        const d = Math.hypot(this.state.x - r.x, this.state.y - r.y);
+        if (d < dist) {
+          this.nearNpc = id;
+          this.nearest = null;
+          dist = d;
+        }
+      }
+    }
+    const o = this.state.order;
+    if (o?.kind === "delivery" && this.state.pizza?.stage === "boxed") {
+      const a = this.map.spots.find((p) => p.address === o.destination);
+      if (a && Math.hypot(a.x - this.state.x, a.y - this.state.y) < 65) {
+        this.nearNpc = null;
+        this.nearest = a;
+      }
     }
   }
   interact() {
     this.findNearest();
-    const spot = this.nearest;
-    if (!spot) {
-      this.ui.toast("Chegue um pouco mais perto para interagir.");
+    if (this.nearNpc) {
+      this.talk(this.nearNpc);
       return;
     }
-    sound();
-    switch (spot.kind) {
-      case "door":
-        this.travel(spot.to!);
-        break;
-      case "npc":
-        this.talk(spot.person!);
-        break;
+    const p = this.nearest;
+    if (!p) {
+      this.think("Um pouco mais perto…", 1.5);
+      return;
+    }
+    sound("tap");
+    switch (p.kind) {
       case "clean":
-        this.clean(spot);
+        this.clean(p);
         break;
       case "book":
         this.readBook();
         break;
       case "bench":
-        this.ui.kitchen();
+        if (this.state.day < 2) this.think("Primeiro, uma boa limpeza.");
+        else this.ui.kitchen();
         break;
       case "oven":
-        if (this.state.day === 5 && !this.state.repaired) this.ui.repair();
-        else if (this.state.pizza?.stage === "ready")
-          this.ui.toast("Você está carregando uma pizza. Entregue ao cliente.");
-        else this.ui.oven();
+        this.useOven();
         break;
-      case "shop":
-        this.ui.shop();
+      case "pack":
+        if (this.state.pizza?.stage === "ready") {
+          this.state.pizza.stage = "boxed";
+          this.ui.toast("Pizza embalada! Siga o marcador dourado.");
+          sound("box");
+          this.persist();
+        } else this.think("Asse uma pizza antes de embalar.");
         break;
-      case "upgrade":
-        this.ui.upgrade();
+      case "phone":
+        this.answerPhone();
         break;
       case "bed":
         if (canSleep(this.state)) this.ui.sleep();
         else
-          this.ui.dialogue([
-            {
-              who: "hero",
-              text:
-                this.state.day === 7
-                  ? "Antes de descansar, quero terminar a comemoração e ler o caderno."
-                  : `Ainda tenho algo para fazer. ${objective(this.state)}`,
-            },
-          ]);
+          this.think(
+            this.state.day === 7
+              ? "Quero terminar a festa e ler o caderno."
+              : objective(this.state),
+          );
+        break;
+      case "shop":
+        this.ui.shop();
+        break;
+      case "stock":
+        this.ui.journal();
+        break;
+      case "upgrade":
+        this.ui.upgrade();
+        break;
+      case "address":
+        if (
+          this.state.order?.kind === "delivery" &&
+          this.state.order.accepted &&
+          this.state.order.destination === p.address
+        )
+          this.deliver();
+        else this.think(p.label);
         break;
     }
   }
-  clean(spot: Spot) {
-    if (this.state.cleaned.includes(spot.id)) return;
-    this.state.cleaned.push(spot.id);
-    const x = this.hero.x,
-      y = this.hero.y;
-    this.state.x = x;
-    this.state.y = y - 6;
-    this.drawWorld();
+  useOven() {
+    const s = this.state;
+    if (s.day === 5 && !s.repaired) {
+      this.ui.repair();
+      return;
+    }
+    if (s.pizza?.stage === "oven") {
+      takePizza(s);
+      sound(s.pizza.quality === "perfeita" ? "good" : "bad");
+      this.ui.toast(
+        `Pizza ${s.pizza.quality}. ${s.order?.kind === "delivery" ? "Embale na bancada ao lado." : "Leve ao cliente."}`,
+      );
+    } else {
+      const e = bake(s);
+      if (e) this.think(e);
+      else {
+        this.readySignal = false;
+        sound("bake");
+        this.ui.toast("No forno! Retire quando a borda dourar.");
+      }
+    }
     this.persist();
-    sound("good");
-    this.ui.toast(
-      this.state.cleaned.length === cleaning.length
-        ? "Pronto! Debaixo das caixas havia um caderno na cozinha."
-        : `${spot.label === "Organizar cadeira" ? "Cadeira no lugar!" : "Mais um cantinho arrumado!"} · ${this.state.cleaned.length}/${cleaning.length}`,
+  }
+  answerPhone() {
+    const o = this.state.order;
+    if (o?.kind !== "delivery") {
+      this.think("Nenhuma ligação agora. O silêncio também tem seu valor.");
+      return;
+    }
+    if (o.accepted) {
+      this.think(
+        `Entrega: ${recipes[o.recipe].name} · ${buildings.find((b) => b.place === o.destination)?.address}`,
+      );
+      return;
+    }
+    this.ui.dialogue(
+      [
+        {
+          who: o.person,
+          text: `Alô? Aqui é ${names[o.person]}. Você faz entrega? Uma de ${recipes[o.recipe].name.toLowerCase()}, por favor. Estou em ${buildings.find((b) => b.place === o.destination)?.address}. Sem pressa; ainda estou pondo a mesa.`,
+        },
+        {
+          who: "hero",
+          text: "Missão fora da cozinha. Assar, embalar e levar. Vamos nessa.",
+        },
+      ],
+      () => {
+        o.accepted = true;
+        this.persist();
+        sound("order");
+      },
     );
+  }
+  deliver() {
+    const result = serve(this.state);
+    if (result.error) {
+      this.think(result.error);
+      return;
+    }
+    sound("coins");
+    this.ui.toast(`Entrega feita! +R$ ${result.amount}`);
+    this.think("Uma pizza quentinha e um caminho novo conhecido.");
+    startOrder(this.state);
+    this.persist();
+  }
+  talk(id: NpcId) {
+    const s = this.state,
+      o = s.order;
+    if (
+      o?.person === id &&
+      o.kind === "delivery" &&
+      o.accepted &&
+      s.place === o.destination
+    ) {
+      this.deliver();
+      return;
+    }
+    if (o?.person === id && o.kind !== "delivery" && s.place === "pizzeria") {
+      if (!o.accepted) {
+        this.ui.dialogue(
+          [
+            {
+              who: id,
+              text: `${id === "rosa" ? "A mesa estava com saudade de mim." : id === "lia" ? "Hoje consegui almoçar antes de esquecer de novo." : "Fechei a oficina. Agora é a vez do forno trabalhar."} Uma de ${recipes[o.recipe].name.toLowerCase()}, por favor.`,
+            },
+          ],
+          () => {
+            o.accepted = true;
+            this.persist();
+            sound("order");
+          },
+        );
+        return;
+      }
+      if (s.pizza && ["ready", "boxed"].includes(s.pizza.stage)) {
+        const r = serve(s);
+        if (r.error) this.think(r.error);
+        else {
+          this.ui.dialogue([{ who: id, text: r.text! }], () => {
+            startOrder(s);
+            this.persist();
+          });
+          sound("coins");
+          this.ui.toast(`+R$ ${r.amount} · Obrigado pela visita!`);
+          this.persist();
+        }
+        return;
+      }
+      this.ui.dialogue([
+        {
+          who: id,
+          text: `Uma de ${recipes[o.recipe].name.toLowerCase()}, lembra? Vou aproveitar a espera para descansar um pouco.`,
+        },
+      ]);
+      return;
+    }
+    this.ui.dialogue([
+      {
+        who: id,
+        text: smallTalk[id][(s.day + s.dailyServed) % smallTalk[id].length],
+      },
+    ]);
+  }
+  checkIntroduction() {
+    const s = this.state;
+    if (this.ui.mode || s.place !== "pizzeria" || s.introduced.includes(s.day))
+      return;
+    const main = s.day === 4 ? "lia" : s.day === 5 ? "daniel" : "rosa";
+    if (s.npcs[main].place !== "pizzeria") return;
+    if (s.day === 7 && ids.some((id) => s.npcs[id].place !== "pizzeria"))
+      return;
+    this.ui.dialogue(introductions[s.day], () => {
+      introDone(s);
+      this.persist();
+    });
+  }
+  clean(p: Spot) {
+    if (this.state.cleaned.includes(p.id)) return;
+    this.state.cleaned.push(p.id);
+    sound("clean");
+    this.drawWorld();
+    this.think(
+      p.id.startsWith("cadeira")
+        ? "Agora sim. Uma cadeira para a próxima conversa."
+        : this.state.cleaned.length === cleaning.length
+          ? "O chão apareceu. E o caderno também."
+          : "Um cantinho de cada vez.",
+    );
+    this.persist();
   }
   readBook() {
     const s = this.state;
     if (s.day === 1) {
       if (s.cleaned.length < cleaning.length) {
-        this.ui.dialogue([
-          {
-            who: "hero",
-            text: "O balcão está coberto de coisas. Primeiro vou terminar a limpeza.",
-          },
-        ]);
+        this.think("O caderno está preso debaixo dessa bagunça.");
+        return;
+      }
+      if (!s.introduced.includes(1)) {
+        this.think("A Rosa chegou. Quero ouvir o que ela tem para contar.");
         return;
       }
       this.ui.dialogue(
         [
           {
             who: "hero",
-            text: "“Receitas do Antônio”. O caderno do vô! Tem molho seco na capa… e anotações nas margens.",
+            text: "“Receitas do Antônio”. Tem manchas de molho e uma folha de manjericão entre as páginas.",
           },
           {
             who: "rosa",
-            text: "Ele dizia que receita boa era a que a gente compartilhava. Guarde com carinho.",
+            text: "Ele anotava o que cada pessoa gostava. A receita era só metade da página. A outra metade era gente.",
           },
           {
             who: "hero",
-            text: "Pizza de queijo. Vou começar por ela amanhã. Hoje, preciso encontrar a cama lá em cima.",
+            text: "Então amanhã eu começo pela primeira. Hoje… acho que já mereci conhecer a cama lá em cima.",
           },
         ],
         () => {
@@ -467,110 +782,21 @@ export class ValdoraScene extends Phaser.Scene {
       });
     } else this.ui.journal();
   }
-  talk(p: Person) {
-    const s = this.state,
-      order = s.order;
-    if (s.place === "pizzeria" && order?.person === p) {
-      if (!order.accepted) {
-        this.ui.dialogue(
-          [
-            {
-              who: p,
-              text: `${p === "rosa" ? "Meu pedido vem com uma pitadinha de saudade." : p === "lia" ? "Depois de regar tanta planta, agora é minha vez." : "Hoje a oficina deu fome."} Uma pizza de ${recipes[order.recipe].name.toLowerCase()}, por favor.`,
-            },
-            { who: "hero", text: "Pode deixar. Vou preparar uma caprichada." },
-          ],
-          () => {
-            order.accepted = true;
-            this.persist();
-            this.updateNpcBubbles();
-          },
-        );
-        return;
-      }
-      if (s.pizza?.stage === "ready") {
-        const result = serve(s);
-        if (result.error) {
-          this.ui.toast(result.error, true);
-          return;
-        }
-        // Depart, then return/arrive for the next order. State is saved with no active customer during this interval.
-        const sprite = this.npcs.get(p);
-        if (sprite) {
-          sprite.play(`${p}-walk-2`);
-          this.tweens.add({
-            targets: sprite,
-            y: 700,
-            alpha: 0,
-            duration: 1100,
-            onComplete: () => {
-              if (sprite.active) {
-                const pos = this.map.spots.find((v) => v.person === p);
-                sprite
-                  .setPosition(pos?.x || 470, (pos?.y || 440) + 6)
-                  .setAlpha(1)
-                  .play(`${p}-idle-2`);
-              }
-            },
-          });
-        }
-        this.ui.dialogue(
-          [
-            { who: p, text: result.text! },
-            {
-              who: "hero",
-              text: `Obrigado por vir! +R$ ${result.amount}${s.dailyServed >= quota(s) ? " · Os pedidos de hoje estão concluídos." : ""}`,
-            },
-          ],
-          () => {
-            startOrder(s);
-            this.persist();
-            this.updateNpcBubbles();
-          },
-        );
-        sound("good");
-        this.persist();
-        return;
-      }
-      this.ui.dialogue([
-        {
-          who: p,
-          text: `Sem pressa, ${s.name}. Minha pizza é de ${recipes[order.recipe].name.toLowerCase()}. ${s.pizza?.stage === "oven" ? "O forno já está cheirando bem!" : "Eu espero aqui."}`,
-        },
-      ]);
-      return;
-    }
-    this.ui.dialogue([
-      {
-        who: p,
-        text:
-          smallTalk[p][(s.day + (s.sold % 3)) % smallTalk[p].length] ||
-          "Que bom estar em casa.",
-      },
-    ]);
-  }
-  useOven() {
-    const s = this.state;
-    let error: string | null;
-    if (s.pizza?.stage === "oven") {
-      error = takePizza(s);
-      if (!error) {
-        this.ui.close();
-        this.ui.toast(
-          `Pizza ${s.pizza!.quality}! Leve ao cliente no salão.`,
-          s.pizza!.quality !== "perfeita",
-        );
-      }
-    } else {
-      error = bake(s);
-      if (!error) {
-        this.alarm = false;
-        this.ui.oven();
-        sound("good");
-      }
-    }
-    if (error) this.ui.toast(error, true);
-    this.persist();
+  travel(door: Door) {
+    if (this.transition) return;
+    this.transition = true;
+    this.releaseKeys();
+    sound("door");
+    this.cameras.main.fadeOut(140, 23, 28, 28);
+    this.time.delayedCall(155, () => {
+      this.state.place = door.to;
+      [this.state.x, this.state.y] = door.spawn;
+      this.drawWorld();
+      this.cameras.main.fadeIn(170, 23, 28, 28);
+      this.transition = false;
+      this.doorLock = 1;
+      this.persist();
+    });
   }
   sleep() {
     this.ui.close();
@@ -578,5 +804,40 @@ export class ValdoraScene extends Phaser.Scene {
     this.drawWorld();
     this.persist();
     this.ui.dayCard();
+    sound("day");
+  }
+  persist() {
+    if (this.running) this.saveFailed = !save(this.state);
+  }
+  updateDeliveryMarker() {
+    const o = this.state.order;
+    if (
+      o?.kind !== "delivery" ||
+      !o.accepted ||
+      this.state.pizza?.stage !== "boxed"
+    ) {
+      this.arrow.setVisible(false);
+      return;
+    }
+    let target: [number, number];
+    if (this.state.place === "street") {
+      const b = buildings.find((b) => b.place === o.destination)!;
+      target = [b.door[0], b.door[1] + 30];
+    } else if (this.state.place === o.destination)
+      target = [this.state.npcs[o.person].x, this.state.npcs[o.person].y];
+    else {
+      const d =
+        this.map.doors.find((d) => d.to === "street") || this.map.doors[0];
+      target = [d.x + d.w / 2, d.y];
+    }
+    const cam = this.cameras.main,
+      px = target[0] - cam.scrollX,
+      py = target[1] - cam.scrollY,
+      cx = Math.max(24, Math.min(616, px)),
+      cy = Math.max(48, Math.min(350, py));
+    this.arrow
+      .setPosition(cx, cy)
+      .setRotation(Math.atan2(py - cy, px - cx))
+      .setVisible(true);
   }
 }

@@ -22,6 +22,7 @@ import {
   startOrder,
   takePizza,
   tick,
+  SAVE_KEY,
 } from "../src/state";
 
 test("a semana completa pode ser concluída, inclusive com forno melhorado e compras", () => {
@@ -66,6 +67,11 @@ test("a semana completa pode ser concluída, inclusive com forno melhorado e com
       tick(s, ovenTime(s) + 1);
       assert.equal(takePizza(s), null);
       assert.equal(s.pizza?.quality, "perfeita");
+      s.place = "pizzeria";
+      if (s.order!.kind === "delivery") {
+        s.pizza!.stage = "boxed";
+        s.place = s.order!.destination!;
+      }
       const result = serve(s);
       assert.ok(result.amount! > 0);
       assert.equal(result.error, undefined);
@@ -76,6 +82,7 @@ test("a semana completa pode ser concluída, inclusive com forno melhorado e com
   assert.equal(s.sold, 20);
   assert.equal(s.customers, sales);
   assert.equal(s.perfect, 20);
+  assert.equal(s.deliveries, 4);
   assert.ok(s.earned > 500);
   assert.equal(nextDay(s), false);
 });
@@ -102,6 +109,7 @@ test("forno distingue cru, perfeito e queimado; pedido errado não some", () => 
     [26, "queimada"],
   ] as const) {
     const s = fresh("A");
+    s.place = "pizzeria";
     s.day = 3;
     introDone(s);
     s.order!.accepted = true;
@@ -118,8 +126,10 @@ test("forno distingue cru, perfeito e queimado; pedido errado não some", () => 
     assert.equal(s.dailyServed, 1);
   }
   const s = fresh("A");
+  s.place = "pizzeria";
   s.day = 4;
   introDone(s);
+  s.place = s.order!.destination!;
   s.order!.accepted = true;
   s.pizza = {
     recipe: "queijo",
@@ -143,7 +153,7 @@ test("falência, relógio tarde e defeito não tornam a semana impossível", () 
   assert.equal(s.bought, true);
   for (const i of recipes[s.order!.recipe].items) assert.ok(s.inventory[i] > 0);
   tick(s, 100000);
-  assert.equal(s.minute, 1430);
+  assert.equal(s.minute, 1770);
   s.day = 5;
   beginPizza(s, "queijo");
   recipes.queijo.items.forEach((i) => addIngredient(s, i));
@@ -179,8 +189,8 @@ test("salva e restaura inventário, forno, narrativa e progresso; save corrompid
   tick(restored, 4);
   takePizza(restored);
   assert.equal(restored.pizza!.quality, "perfeita");
-  values.set("valdora.week.v1", '{"version":1,"day":99}');
+  values.set(SAVE_KEY, '{"version":1,"day":99}');
   assert.equal(load(), null);
-  values.set("valdora.week.v1", "broken");
+  values.set(SAVE_KEY, "broken");
   assert.equal(load(), null);
 });

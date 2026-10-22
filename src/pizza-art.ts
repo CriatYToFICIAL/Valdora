@@ -1,7 +1,11 @@
 import type { Ingredient } from "./data";
 // The supplied packs have no layered pizza assembly. Draw this diagram in a 64px
 // buffer and enlarge with nearest-neighbour, matching the world's pixel grid.
-export function paintPizza(canvas: HTMLCanvasElement, items: Ingredient[]) {
+export function paintPizza(
+  canvas: HTMLCanvasElement,
+  items: Ingredient[],
+  placements: { item: Ingredient; x: number; y: number }[] = [],
+) {
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, 64, 64);
   ctx.imageSmoothingEnabled = false;
@@ -42,8 +46,14 @@ export function paintPizza(canvas: HTMLCanvasElement, items: Ingredient[]) {
     [20, 42],
     [43, 41],
   ];
+  const placed = (item: Ingredient) =>
+    placements.filter((p) => p.item === item).length
+      ? placements
+          .filter((p) => p.item === item)
+          .map((p) => [Math.round(14 + p.x * 36), Math.round(14 + p.y * 36)])
+      : spots;
   if (items.includes("calabresa"))
-    for (const [cx, cy] of spots)
+    for (const [cx, cy] of placed("calabresa"))
       for (let yy = -4; yy <= 4; yy++)
         for (let xx = -4; xx <= 4; xx++)
           if (xx * xx + yy * yy < 18) {
@@ -56,7 +66,7 @@ export function paintPizza(canvas: HTMLCanvasElement, items: Ingredient[]) {
             ctx.fillRect(cx + xx, cy + yy, 1, 1);
           }
   if (items.includes("manjericao"))
-    for (const [cx, cy] of spots) {
+    for (const [cx, cy] of placed("manjericao")) {
       ctx.fillStyle = "#487c42";
       for (let yy = -4; yy <= 4; yy++)
         for (let xx = -3; xx <= 3; xx++)

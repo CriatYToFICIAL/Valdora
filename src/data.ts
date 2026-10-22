@@ -1,5 +1,12 @@
 export type Person = "hero" | "rosa" | "lia" | "daniel";
-export type Place = "street" | "pizzeria" | "apartment" | "shop";
+export type Place =
+  | "street"
+  | "pizzeria"
+  | "apartment"
+  | "shop"
+  | "rosaHome"
+  | "florist"
+  | "workshop";
 export type Ingredient =
   | "massa"
   | "molho"
@@ -145,7 +152,7 @@ export const introductions: Record<number, Line[]> = {
     },
     {
       who: "lia",
-      text: "Destino gastronômico. A mercearia, na rua à direita, vende tudo para ela. Passe lá e faça uma compra. E sim, eu vim pedir uma.",
+      text: "Destino gastronômico. A mercearia vende tudo para ela. Passe lá. E escuta o telefone: contei para a Rosa que você está aceitando entregas. Ela já deve ter posto a mesa.",
     },
   ],
   5: [
@@ -155,8 +162,8 @@ export const introductions: Record<number, Line[]> = {
       text: "Ouvi da oficina. Quando um forno começa a assobiar, não é talento musical.",
     },
     {
-      who: "rosa",
-      text: "Daniel entende dessas coisas. E fala mais com motores do que com gente.",
+      who: "hero",
+      text: "O vô dizia que todo barulho era o forno conversando. Acho que este está reclamando.",
     },
     {
       who: "daniel",
@@ -165,20 +172,20 @@ export const introductions: Record<number, Line[]> = {
   ],
   6: [
     {
-      who: "lia",
-      text: "Já tem gente marcando encontro aqui. Até a Rosa deixou de chamar isso de “a pizzaria fechada”.",
+      who: "rosa",
+      text: "Já tem gente marcando encontro aqui. Ontem alguém disse “te espero no Antônio”. A cidade se lembrou do caminho.",
     },
     {
       who: "rosa",
-      text: "Eu nunca disse fechada. Disse temporariamente muito silenciosa.",
+      text: "E eu nunca chamei isso de abandonado, viu? Só de temporariamente muito silencioso.",
     },
     {
       who: "hero",
       text: "O dinheiro está começando a sobrar. Talvez dê para melhorar o forno.",
     },
     {
-      who: "daniel",
-      text: "Deixei um kit de isolamento na bancada de melhorias. Custa R$ 80. Assa mais rápido. Não faz milagres com pizza esquecida.",
+      who: "rosa",
+      text: "O Daniel deixou um kit ali. R$ 80, disse ele. Deixou também um bilhete: “assa mais rápido, não faz milagres”. Até escrevendo ele economiza conversa.",
     },
   ],
   7: [

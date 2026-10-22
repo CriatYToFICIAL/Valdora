@@ -22,11 +22,5 @@ for folder, key in [('Protagonista','hero'),('DonaRosa','rosa'),('Lia','lia'),('
             (OUT / f'{key}-{n.replace("/","-")}').write_bytes(z.read(n))
 for folder,key in [('DonaRosa','rosa'),('Lia','lia'),('Daniel','daniel')]:
     shutil.copyfile(SOURCE / 'RetratoMaisDetalhadoDosPersonagens' / f'{folder}.png', OUT / f'{key}-portrait.png')
-with ZipFile(SOURCE / 'Serene_Village_revamped_v1.9.zip') as z:
-    (OUT / 'village.png').write_bytes(z.read('SERENE_VILLAGE_REVAMPED/Serene_Village_16x16.png'))
-with ZipFile(SOURCE / 'Modern_Interiors_Free_v2.2.zip') as z:
-    for name,target in [('Interiors_free_16x16.png','interiors.png'),('Room_Builder_free_16x16.png','rooms.png')]:
-        (OUT / target).write_bytes(z.read(f'Modern tiles_Free/Interiors_free/16x16/{name}'))
-    (OUT / 'Modern-Interiors-LICENSE.txt').write_bytes(z.read('Modern tiles_Free/LICENSE.txt'))
 (OUT / 'inspection.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
 print(json.dumps(report,indent=2))
