@@ -1,0 +1,25 @@
+{
+  "name": "valdora",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "assets": "python3 scripts/prepare_assets.py",
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "tsx --test tests/*.test.ts",
+    "test:browser": "node scripts/browser-qa.mjs",
+    "format": "prettier --write src tests scripts/browser-qa.mjs"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "prettier": "^3.6.2",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.3",
+    "vite": "7.3.7"
+  }
+}
