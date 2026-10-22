@@ -12,6 +12,7 @@ Executada em 22/10/2026, em Chromium headless. Estes resultados não substituem 
 - Execução final sem erros JavaScript ou respostas HTTP de erro.
 - `node scripts/visual-qa.mjs`: renderização dos três NPCs conferida nos sete mapas, de acordo com a identidade global; máscara da sombra do protagonista com 943 pixels de silhueta. Capturas de meio-dia, pôr do sol, noite, madrugada e interior noturno.
 - O teste complementar abriu o build pelo iniciador Python: novo jogo, nome, movimento por teclado, caderno, salvamento, recarga e continuar passaram. O build não expõe o acesso de diagnóstico do desenvolvimento.
+- O ZIP final foi extraído em outra pasta e iniciado somente com Python na porta 8001. Menu, novo jogo, assets, teclado, caderno, salvar/recarregar e continuar passaram novamente, sem erros. A integridade ZIP e os hashes dos 49 arquivos de produção foram conferidos; `BUILD.json` aponta para o commit fonte `6a14b76`.
 - Os oito PNGs walk/idle e os três retratos permanecem idênticos aos originais. Os 13 PNGs LPC importados conferem com os hashes do manifesto. Nenhuma textura LimeZu antiga é carregada ou está em `dist`.
 
 ## Método e limites
